@@ -23,6 +23,9 @@ importers:
       '@confectory/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@confectory/shells':
+        specifier: workspace:*
+        version: link:../../packages/shells
       hono:
         specifier: 4.6.14
         version: 4.6.14

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@confectory/shared": "workspace:*",
+    "@confectory/shells": "workspace:*",
     "hono": "4.6.14"
   },
   "devDependencies": {

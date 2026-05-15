@@ -6,33 +6,42 @@ state of the implementation.
 
 ## Status
 
-**Phase 1, Week 1-2 foundations (§21.1).** What's in tree:
+**Phase 1, Weeks 1-4 (§21.1-§21.2).** What's in tree:
+
+Foundations (Week 1-2, §21.1):
 
 - Monorepo scaffolding: pnpm workspaces + Turborepo (§20.1).
-- `@confectory/shared`: typed domain model from §4 (Shell, Room, Guest,
-  Oompa-Loompa, Founder, Consequence, MoodVector) + zod schemas that
-  enforce the §4 invariants (e.g. door count by topology).
-- `@confectory/shells`: `defineShell()` helper, the canonical sample
-  from §23 (`the-hush-before`), and a foyer registry entry (§8).
-- `@confectory/prompts`: typed, versioned `PromptTemplate<T>` per §10.5,
-  with the voice header and the fast Critic template (§6.1).
+- `@confectory/shared`: typed domain model from §4 + zod schemas that
+  enforce §4 invariants (e.g. door count by topology).
+- `@confectory/shells`: `defineShell()`, the §23 sample, a foyer entry.
+- `@confectory/prompts`: typed `PromptTemplate<T>` (§10.5), voice
+  header, fast Critic template (§6.1).
 - `@confectory/style-guide`: machine-readable counterpart to §12.3.
 - `@confectory/cli`: `confectory-shell validate-all` for CI (§20.2).
 - `apps/api`: Hono Worker (§3.2) with `GuestSessionDO` (§5) and
-  `FactoryStateDO` singleton (§3.2), wrangler.toml binding D1, KV, R2,
-  Vectorize, Queues.
-- `apps/web`: Vite + React 19 + R3F shell, a placeholder Foyer scene
-  (§8) and a session-start hook.
-- `apps/cms`: Payload 3.x with the §15.2 collections wired up and the
-  §15.4 RBAC roles.
-- `infra/migrations/d1/0001_initial.sql`: initial schema for guests,
-  visits, consequences, ticket-stub marks, episodic-memory source text,
-  per-guest telemetry trail (§3.4, §7.1, §16.3).
+  `FactoryStateDO` singleton; wrangler binds D1, KV, R2, Vectorize,
+  Queues per §3.4.
+- `apps/web`: Vite + React 19 + R3F 9 with a foyer scene (§8).
+- `apps/cms`: Payload 3.x with all §15.2 collections and §15.4 RBAC.
+- `infra/migrations/d1/0001_initial.sql` (§3.4, §7.1, §16.3).
 - GitHub Actions CI: lint, typecheck, test, shell validation.
 
-Not yet built (later Phase 1 weeks):
+The foyer (Week 3-4, §21.2):
 
-- Brass dial mechanics and resonant layout (§8.2, §8.3) — week 3-4.
+- Resonant dial layout (§8.3) in `@confectory/shared`, with the new-guest
+  stable-layout window for the first 10 sessions, and factory nudges
+  that override recency.
+- Brass dial (§8.2): 3D click-and-drag rotation, inertia + decay,
+  500ms settle detection, tick marks per shell entry.
+- The sign (§9.3) and a name plate (§9.5) that render the currently-
+  aimed-at room's name in its signature typography.
+- Diegetic ticket stub in the corner of the screen (§8.4).
+- `/foyer/dial` returns the resonant layout for this guest, computed in
+  the guest's Durable Object; `/foyer/settle` records the settle intent
+  that drives speculative pre-generation in Week 5-7.
+
+Not yet built (later Phase 1):
+
 - Room assembly pipeline, speculative pre-generation, fast Style Critic
   in flight (§5, §6.1) — week 5-7.
 - The Founder set-piece, the first Oompa-Loompa (§11) — week 8-10.
