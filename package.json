@@ -1,0 +1,24 @@
+{
+  "name": "the-confectory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Confectory monorepo. See arch-t-spec.md.",
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "shells:validate": "pnpm --filter @confectory/cli run shells:validate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "turbo": "2.3.3",
+    "typescript": "5.7.2"
+  }
+}

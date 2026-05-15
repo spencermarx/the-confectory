@@ -1,0 +1,22 @@
+{
+  "name": "@confectory/cms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "payload dev",
+    "build": "payload build",
+    "start": "payload start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@confectory/shared": "workspace:*",
+    "@payloadcms/db-postgres": "3.18.0",
+    "@payloadcms/next": "3.18.0",
+    "@payloadcms/richtext-lexical": "3.18.0",
+    "payload": "3.18.0"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
+}

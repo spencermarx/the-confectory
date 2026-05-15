@@ -1,0 +1,59 @@
+name = "confectory-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# §3.2: Workers AI binding. Bind once Phase 1 generation lands.
+# [ai]
+# binding = "AI"
+
+# §3.2: Per-guest Durable Object + global factory singleton DO.
+[[durable_objects.bindings]]
+name = "GUEST_SESSION"
+class_name = "GuestSessionDO"
+
+[[durable_objects.bindings]]
+name = "FACTORY_STATE"
+class_name = "FactoryStateDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GuestSessionDO", "FactoryStateDO"]
+
+# §3.4: D1 for structured per-guest persistence.
+[[d1_databases]]
+binding = "DB"
+database_name = "confectory"
+database_id = "REPLACE_ME"
+migrations_dir = "../../infra/migrations/d1"
+
+# §3.4: KV for shell metadata + config.
+[[kv_namespaces]]
+binding = "SHELLS_KV"
+id = "REPLACE_ME"
+
+# §3.4: R2 for assets.
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "confectory-assets"
+
+# §3.4: Vectorize for episodic memory.
+[[vectorize]]
+binding = "MEMORY"
+index_name = "confectory-episodic-memory"
+
+# §3.4: Queues for background jobs (slow Critic, summarization).
+[[queues.producers]]
+binding = "BACKGROUND"
+queue = "confectory-background"
+
+[[queues.consumers]]
+queue = "confectory-background"
+max_batch_size = 10
+max_batch_timeout = 30
+
+[vars]
+ENVIRONMENT = "development"
+
+[observability]
+enabled = true

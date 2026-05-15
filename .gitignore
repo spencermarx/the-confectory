@@ -1,0 +1,30 @@
+node_modules/
+dist/
+build/
+.turbo/
+.wrangler/
+.next/
+.cache/
+coverage/
+*.log
+.DS_Store
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# editor
+.vscode/
+.idea/
+
+# pnpm
+.pnpm-store/
+
+# payload
+apps/cms/media/
+apps/cms/.payload/
+
+# generated
+apps/api/worker-configuration.d.ts

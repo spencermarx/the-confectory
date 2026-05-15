@@ -1,0 +1,26 @@
+import { Hono } from 'hono';
+import type { Env } from './env.ts';
+import { healthRoutes } from './routes/health.ts';
+import { sessionRoutes } from './routes/session.ts';
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.route('/health', healthRoutes);
+app.route('/session', sessionRoutes);
+
+app.notFound((c) => c.json({ error: 'not_found' }, 404));
+
+app.onError((err, c) => {
+  console.error('unhandled', err);
+  return c.json({ error: 'internal_error' }, 500);
+});
+
+export default {
+  fetch: app.fetch,
+  async queue(_batch: MessageBatch, _env: Env): Promise<void> {
+    // §3.2: background consumer. Phase 1 wires in slow Critic + summarization.
+  },
+} satisfies ExportedHandler<Env>;
+
+export { GuestSessionDO } from './durable-objects/guest-session.ts';
+export { FactoryStateDO } from './durable-objects/factory-state.ts';
