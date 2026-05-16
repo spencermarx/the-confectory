@@ -11,6 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@confectory/characters": "workspace:*",
     "@confectory/shared": "workspace:*",
     "@confectory/shells": "workspace:*",
     "hono": "4.6.14"

@@ -1,6 +1,8 @@
 import { OrbitControls } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { SubtitleOverlay } from '../dialogue/SubtitleOverlay.tsx';
+import { speakToOompaLoompa } from '../dialogue/use-dialogue.ts';
 import { type DialEntry, settleOnShell, useDial } from '../hooks/use-dial.ts';
 import { BrassDial } from './BrassDial.tsx';
 import { NamePlate } from './NamePlate.tsx';
@@ -15,12 +17,38 @@ export function Foyer() {
   const dial = useDial(true);
   const entries = dial.data?.entries ?? [];
   const [aimed, setAimed] = useState<DialEntry | null>(null);
+  const [greeting, setGreeting] = useState<{ speaker: string; text: string } | null>(null);
 
   const handleAim = useCallback((entry: DialEntry) => setAimed(entry), []);
   const handleSettle = useCallback((entry: DialEntry) => {
     void settleOnShell(entry.shell_id).catch(() => {
       // Settle is advisory: pre-gen will retry on actual threshold cross.
     });
+  }, []);
+
+  // §17.3: the Sweetwright greets the guest in the foyer. This is the
+  // consent moment — in-character — and it doubles as the first line a
+  // new guest hears from the factory.
+  useEffect(() => {
+    let cancelled = false;
+    speakToOompaLoompa({
+      character_id: 'ol-sweetwright',
+      shell_id: 'the-foyer',
+      prompt_hint: 'A guest has just arrived in the foyer.',
+    })
+      .then((reply) => {
+        if (cancelled) return;
+        setGreeting({ speaker: 'The Sweetwright', text: reply.text });
+        window.setTimeout(() => {
+          if (!cancelled) setGreeting(null);
+        }, 7000);
+      })
+      .catch(() => {
+        // Silent: §19.1 says the factory falls silent rather than apologize for itself.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -61,6 +89,7 @@ export function Foyer() {
         </Suspense>
       </Canvas>
       <TicketStub />
+      {greeting ? <SubtitleOverlay speaker={greeting.speaker} text={greeting.text} /> : null}
     </>
   );
 }

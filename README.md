@@ -6,7 +6,7 @@ state of the implementation.
 
 ## Status
 
-**Phase 1, Weeks 1-7 (§21.1-§21.3).** What's in tree:
+**Phase 1, Weeks 1-10 (§21.1-§21.4).** What's in tree:
 
 Foundations (Week 1-2, §21.1):
 
@@ -66,13 +66,37 @@ The engine (Week 5-7, §21.3):
   singleton `FactoryStateDO` accepts partial mood patches that take
   effect on the next room assembly.
 
+Characters (Week 8-10, §21.4):
+
+- `@confectory/characters` package: a `defineOompaLoompa()` helper that
+  enforces the 16-dim personality vector taxonomy (frozen at the start
+  of Phase 1), a `defineFounder()` singleton guard, a song-template
+  library, and a set-piece library.
+- One fully-implemented Oompa-Loompa: The Sweetwright (§19.1), with
+  role, voice id, personality vector, song meter preferences.
+- The Founder singleton with two set-pieces wired:
+  `founder-arrival` (foyer) and `founder-foundry-door` (gate to the
+  Founder's interactive moment).
+- `apps/api/engine/dialogue.ts`: §7.3 prompt builder that injects
+  character identity, room context, mood, structural memory, episodic
+  memory excerpts, and the canonical name registry (§9.4). Runs every
+  dialogue through the Critic with §6.1's retry budget and falls
+  through to authored fallbacks on exhaustion.
+- `VoiceProvider` and `TTSProvider` interfaces per §3.3, with
+  `ElevenLabsTTS`, `GeminiLiveVoice`, and `InProcessTTS` implementations.
+- Routes: `POST /dialogue/oompa-loompa`, `POST /dialogue/founder/set-piece`,
+  `POST /dialogue/founder/interactive` (Foundry-Door-gated; 503 until
+  the Live channel is wired, per §19.1).
+- Web: the Sweetwright greets the guest on first foyer entry (§17.3),
+  surfaced through a diegetic `SubtitleOverlay`.
+
 Not yet built (later Phase 1):
 
-- The Mood Console custom React UI inside Payload (§15.3) and the dial-
-  driven settle → speculative pre-gen wiring on the client.
-- The Founder set-piece, the first Oompa-Loompa (§11) — week 8-10.
 - Episodic memory + summarization (§7) — week 11-13.
-- Telemetry of Wonder, Critic's Notebook (§15.3, §16) — week 14-15.
+- The first concrete consequence (BLUE_FROM_GUM in the appropriate
+  shell, §21.5) — week 11-13.
+- Telemetry of Wonder, Critic's Notebook, Mood Console UI (§15.3, §16)
+  — week 14-15.
 
 ## Layout
 
