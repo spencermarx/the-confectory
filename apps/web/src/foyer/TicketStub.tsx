@@ -1,7 +1,11 @@
+interface TicketStubProps {
+  mark_count?: number;
+}
+
 // §8.4, §4.3: the ticket stub. Diegetic, lives in the guest's pocket.
-// Phase 1: a small corner element showing the blank stub. Marks land
-// in week 11-13 with the consequence work.
-export function TicketStub() {
+// Marks accumulate as consequences trigger (§21.5). The factory
+// acknowledges respawn / consequence count via the stub's appearance.
+export function TicketStub({ mark_count = 0 }: TicketStubProps) {
   return (
     <div
       style={{
@@ -14,6 +18,7 @@ export function TicketStub() {
         borderRadius: '4px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         fontFamily: 'serif',
@@ -23,9 +28,21 @@ export function TicketStub() {
         pointerEvents: 'none',
         userSelect: 'none',
       }}
-      aria-label="Your ticket stub"
+      aria-label={`Your ticket stub${mark_count ? `, ${mark_count} marks` : ''}`}
     >
-      ADMIT ONE
+      <span>ADMIT ONE</span>
+      {mark_count > 0 && (
+        <span
+          style={{
+            marginTop: '2px',
+            fontSize: '0.65rem',
+            letterSpacing: '0.06em',
+            opacity: 0.75,
+          }}
+        >
+          {'• '.repeat(Math.min(mark_count, 5)).trim()}
+        </span>
+      )}
     </div>
   );
 }

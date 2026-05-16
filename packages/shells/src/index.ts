@@ -5,6 +5,7 @@ export { default as theFoundryDoor } from './the-foundry-door.ts';
 export { default as theHushBefore } from './the-hush-before.ts';
 export { default as theTreacleDeep } from './the-treacle-deep.ts';
 export * from './fallbacks/index.ts';
+export * from './consequences/index.ts';
 
 import { registerShells } from './define-shell.ts';
 import foyer from './foyer.ts';

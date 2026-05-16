@@ -6,7 +6,7 @@ state of the implementation.
 
 ## Status
 
-**Phase 1, Weeks 1-10 (§21.1-§21.4).** What's in tree:
+**Phase 1, Weeks 1-13 (§21.1-§21.5).** What's in tree:
 
 Foundations (Week 1-2, §21.1):
 
@@ -90,13 +90,37 @@ Characters (Week 8-10, §21.4):
 - Web: the Sweetwright greets the guest on first foyer entry (§17.3),
   surfaced through a diegetic `SubtitleOverlay`.
 
+Memory and consequence (Week 11-13, §21.5):
+
+- Consequence catalog in `@confectory/shells` (BLUE_FROM_GUM,
+  SMALL_KINDNESS_OBSERVED, TREACLE_STAINED, FOUNDER_INVITED), each a
+  hand-authored `ConsequenceType` with trigger predicate, visible
+  effects, factory-opinion delta, and ticket-stub mark.
+- `applyConsequence()` engine: idempotent on (guest, room, type) per
+  §14.3; updates the guest's consequence list, ticket-stub marks, and
+  factory opinion (clamped to [-1, 1]). 5 tests.
+- `the-hush-before` carries a real `gum-tray` prop slot that triggers
+  BLUE_FROM_GUM end-to-end.
+- `MemoryProvider` interface (§7.1) with `InProcessMemory` for the
+  Phase 1 default and `VectorizeMemory` against the Vectorize binding
+  + a Workers AI embedder.
+- §7.2 session summarization: `shapeSessionSummary()` prunes routine
+  interactions (emotional_weight < 0.25) while preserving every event
+  with a consequence. `summarizeSession()` orchestrates summarize →
+  embed → store. 3 tests.
+- `GuestSessionDO` grows: `/consequence` apply, `/observe` transient
+  event, `/end-session` summarize, `/memory` retrieve.
+- Routes: `GET /consequences/types`, `POST /consequences/apply`,
+  `GET /memory/episodic?q=…`, `POST /memory/observe`,
+  `POST /memory/end-session`.
+- Web: `TicketStub` now surfaces accumulated marks; a small
+  `applyConsequence()` client helper closes the loop.
+
 Not yet built (later Phase 1):
 
-- Episodic memory + summarization (§7) — week 11-13.
-- The first concrete consequence (BLUE_FROM_GUM in the appropriate
-  shell, §21.5) — week 11-13.
 - Telemetry of Wonder, Critic's Notebook, Mood Console UI (§15.3, §16)
   — week 14-15.
+- Visual regression + the Phase 1 latency-budget pass — week 14-15.
 
 ## Layout
 

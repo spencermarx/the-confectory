@@ -59,7 +59,16 @@ export default defineShell({
       visual_style_inherits_destination: false,
     },
   ],
-  prop_slots: [],
+  prop_slots: [
+    {
+      id: 'gum-tray',
+      position: { x: 1.2, y: 0.9, z: 0.4 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      allowed_prop_tags: ['gum-tray', 'temptation'],
+      interactable: true,
+      consequence_on_interact: 'BLUE_FROM_GUM',
+    },
+  ],
   generation_hints: {
     surface_generation_targets: ['wallpaper', 'curtain', 'rug', 'small-paintings'],
     pre_baked_overrides: {

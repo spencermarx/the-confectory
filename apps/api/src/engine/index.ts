@@ -20,3 +20,21 @@ export type {
   CriticVerdict,
   CriticRequest,
 } from './providers/types.ts';
+export { applyConsequence } from './consequence-engine.ts';
+export type {
+  ApplyConsequenceInput,
+  ApplyConsequenceResult,
+} from './consequence-engine.ts';
+export { InProcessMemory, VectorizeMemory } from './providers/memory.ts';
+export type {
+  EpisodicMemory,
+  MemoryProvider,
+  MemoryQuery,
+  MemoryStoreRequest,
+} from './providers/memory.ts';
+export { shapeSessionSummary, summarizeSession } from './summarization.ts';
+export type {
+  SessionEvent,
+  SummarizationInput,
+  SummarizationResult,
+} from './summarization.ts';

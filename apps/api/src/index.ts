@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import type { Env } from './env.ts';
+import { consequenceRoutes } from './routes/consequences.ts';
 import { dialogueRoutes } from './routes/dialogue.ts';
 import { factoryRoutes } from './routes/factory.ts';
 import { foyerRoutes } from './routes/foyer.ts';
 import { healthRoutes } from './routes/health.ts';
+import { memoryRoutes } from './routes/memory.ts';
 import { roomRoutes } from './routes/rooms.ts';
 import { sessionRoutes } from './routes/session.ts';
 
@@ -15,6 +17,8 @@ app.route('/foyer', foyerRoutes);
 app.route('/rooms', roomRoutes);
 app.route('/factory', factoryRoutes);
 app.route('/dialogue', dialogueRoutes);
+app.route('/consequences', consequenceRoutes);
+app.route('/memory', memoryRoutes);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

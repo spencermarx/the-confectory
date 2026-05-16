@@ -1,7 +1,15 @@
 import { type DialEntry, resonantLayout } from '@confectory/shared';
-import type { Guest, GuestLocation, ShellId } from '@confectory/shared';
-import { type AssembledRoom, RoomAssembler } from '../engine/index.ts';
+import type { ConsequenceTypeId, Guest, GuestLocation, ShellId } from '@confectory/shared';
+import {
+  type AssembledRoom,
+  InProcessMemory,
+  RoomAssembler,
+  type SessionEvent,
+  applyConsequence,
+  summarizeSession,
+} from '../engine/index.ts';
 import { AcceptingCritic, InProcessFoundry } from '../engine/providers/in-process.ts';
+import type { MemoryProvider } from '../engine/providers/memory.ts';
 import type { Env } from '../env.ts';
 import { getShell } from '../shells.ts';
 
@@ -10,6 +18,7 @@ interface StoredState {
   session_count: number;
   pending_settle?: { shell_id: ShellId; at: number };
   current_manifest?: AssembledRoom;
+  session_events: SessionEvent[];
 }
 
 interface DialRequestBody {
@@ -25,20 +34,35 @@ interface ThresholdRequestBody {
   candidate_shell_ids: ShellId[];
 }
 
+interface ApplyConsequenceBody {
+  type_id: ConsequenceTypeId;
+  room_id?: string;
+}
+
+interface ObserveEventBody {
+  event: Omit<SessionEvent, 'event_id' | 'occurred_at'> & {
+    occurred_at?: number;
+  };
+}
+
 // §3.2, §5: per-guest Durable Object. Single-writer consistency.
-// Phase 1 Week 5-7: room assembly on threshold cross.
-// Phase 2 layers in speculative pre-generation cache, episodic memory.
+// Phase 1 grows over weeks 5-13:
+//   - Room assembly on threshold cross (week 5-7).
+//   - Consequence apply + factory opinion + ticket stub (week 11-13).
+//   - Session end → summarization → episodic memory (week 11-13).
 export class GuestSessionDO implements DurableObject {
   private readonly state: DurableObjectState;
   private readonly env: Env;
-  // Phase 1 defaults to the in-process providers. Production swaps to
-  // WorkersAI providers (§3.3) via the AI binding once it's available.
   private readonly assembler: RoomAssembler;
+  // §7.1: episodic memory. Phase 1 keeps a per-DO in-process store; the
+  // Worker swaps in VectorizeMemory once the binding is configured.
+  private readonly memory: MemoryProvider;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
     this.assembler = new RoomAssembler(new InProcessFoundry(), new AcceptingCritic());
+    this.memory = new InProcessMemory();
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -56,6 +80,14 @@ export class GuestSessionDO implements DurableObject {
         return this.handleThreshold(request);
       case '/manifest':
         return this.handleManifest(url);
+      case '/consequence':
+        return this.handleConsequence(request);
+      case '/observe':
+        return this.handleObserve(request);
+      case '/end-session':
+        return this.handleEndSession();
+      case '/memory':
+        return this.handleMemory(url);
       default:
         return new Response('not_found', { status: 404 });
     }
@@ -70,8 +102,13 @@ export class GuestSessionDO implements DurableObject {
           ...existing,
           guest: { ...existing.guest, last_active_at: now, current_location: 'foyer' },
           session_count: existing.session_count + 1,
+          session_events: [],
         }
-      : { guest: this.createGuest(now), session_count: 1 };
+      : {
+          guest: this.createGuest(now),
+          session_count: 1,
+          session_events: [],
+        };
 
     await this.state.storage.put<StoredState>('state', stored);
 
@@ -90,9 +127,7 @@ export class GuestSessionDO implements DurableObject {
     return Response.json(stored.guest);
   }
 
-  // §8.3: compute the resonant layout server-side. Single-writer DO
-  // keeps the layout consistent if the same guest opens the dial twice
-  // in close succession.
+  // §8.3: compute the resonant layout server-side.
   private async handleDial(request: Request): Promise<Response> {
     const body = (await request.json()) as DialRequestBody;
     const stored = await this.state.storage.get<StoredState>('state');
@@ -113,9 +148,7 @@ export class GuestSessionDO implements DurableObject {
     return Response.json({ entries, session_count: stored.session_count });
   }
 
-  // §8.2: settle on a name. Records the intent; Week 5-7's pre-gen
-  // pipeline kicks off as the dial settles. Phase 1 holds it for the
-  // threshold cross handler to commit.
+  // §8.2: settle on a name.
   private async handleSettle(request: Request): Promise<Response> {
     const body = (await request.json()) as SettleRequestBody;
     const stored = await this.state.storage.get<StoredState>('state');
@@ -129,8 +162,7 @@ export class GuestSessionDO implements DurableObject {
     return Response.json({ pending_settle: next.pending_settle });
   }
 
-  // §5.1: threshold crossed. Commit the destination, run room assembly,
-  // cache the manifest, return it to the client.
+  // §5.1: threshold crossed.
   private async handleThreshold(request: Request): Promise<Response> {
     const body = (await request.json()) as ThresholdRequestBody;
     const stored = await this.state.storage.get<StoredState>('state');
@@ -190,10 +222,125 @@ export class GuestSessionDO implements DurableObject {
     });
   }
 
+  // §4.6, §21.5: apply a consequence. Updates the guest, the ticket
+  // stub, the factory opinion. Logs the event so summarization can
+  // preserve it.
+  private async handleConsequence(request: Request): Promise<Response> {
+    const body = (await request.json()) as ApplyConsequenceBody;
+    const stored = await this.state.storage.get<StoredState>('state');
+    if (!stored) return new Response('no_session', { status: 404 });
+    const roomId = body.room_id ?? stored.guest.current_room_id;
+    if (!roomId) return new Response('not_in_room', { status: 400 });
+
+    const result = applyConsequence({
+      guest: stored.guest,
+      type_id: body.type_id,
+      applied_in_room_id: roomId,
+      now: Date.now(),
+    });
+
+    if (result.status === 'unknown_type') {
+      return new Response('unknown_consequence_type', { status: 404 });
+    }
+    if (result.status === 'already_applied') {
+      return Response.json({ status: 'already_applied' });
+    }
+
+    const event: SessionEvent = {
+      event_id: `evt-${Date.now()}`,
+      shell_id: stored.guest.current_room_id?.split(':')[1] ?? 'the-foyer',
+      description: `Carried the consequence "${result.type.name}".`,
+      emotional_weight: Math.min(1, Math.abs(result.type.affects_factory_opinion) * 10),
+      occurred_at: Date.now(),
+      consequence_applied: result.consequence,
+    };
+
+    const next: StoredState = {
+      ...stored,
+      guest: result.guest,
+      session_events: [...stored.session_events, event],
+    };
+    await this.state.storage.put<StoredState>('state', next);
+
+    return Response.json({
+      status: 'applied',
+      consequence: result.consequence,
+      visible_effects: result.type.visible_effects,
+      ticket_stub: result.guest.ticket_stub,
+      factory_opinion: result.guest.factory_opinion,
+    });
+  }
+
+  // §7.1: observe a transient event. The summarization job (§7.2)
+  // decides which ones survive into episodic memory.
+  private async handleObserve(request: Request): Promise<Response> {
+    const body = (await request.json()) as ObserveEventBody;
+    const stored = await this.state.storage.get<StoredState>('state');
+    if (!stored) return new Response('no_session', { status: 404 });
+    const event: SessionEvent = {
+      event_id: `evt-${Date.now()}-${stored.session_events.length}`,
+      occurred_at: body.event.occurred_at ?? Date.now(),
+      ...body.event,
+    };
+    const next: StoredState = {
+      ...stored,
+      session_events: [...stored.session_events, event],
+    };
+    await this.state.storage.put<StoredState>('state', next);
+    return Response.json({ event_id: event.event_id });
+  }
+
+  // §7.2: session end. Summarize transient memory into episodic
+  // entries; clear the transient buffer.
+  private async handleEndSession(): Promise<Response> {
+    const stored = await this.state.storage.get<StoredState>('state');
+    if (!stored) return new Response('no_session', { status: 404 });
+
+    const factoryId = this.env.FACTORY_STATE.idFromName('global');
+    const factoryStub = this.env.FACTORY_STATE.get(factoryId);
+    const factoryRes = await factoryStub.fetch('https://do/mood');
+    const factoryMood = (await factoryRes.json()) as ReturnType<typeof JSON.parse>;
+
+    const summary = await summarizeSession(this.memory, {
+      guest: stored.guest,
+      session_events: stored.session_events,
+      factory_mood: factoryMood,
+    });
+
+    const next: StoredState = {
+      ...stored,
+      guest: {
+        ...stored.guest,
+        factory_opinion: clamp(stored.guest.factory_opinion + summary.factory_opinion_delta, -1, 1),
+      },
+      session_events: [],
+    };
+    await this.state.storage.put<StoredState>('state', next);
+
+    return Response.json({
+      prose_summary: summary.prose_summary,
+      episodic_entries: summary.episodic_entries,
+      factory_opinion: next.guest.factory_opinion,
+    });
+  }
+
+  // §7.3: retrieve top-K episodic memories. Dialogue routes pull this
+  // into the prompt context (already plumbed in the dialogue path).
+  private async handleMemory(url: URL): Promise<Response> {
+    const q = url.searchParams.get('q');
+    if (!q) return new Response('q_required', { status: 400 });
+    const top_k = Number.parseInt(url.searchParams.get('top_k') ?? '3', 10);
+    const memories = await this.memory.retrieve({
+      guest_id: this.state.id.toString(),
+      query: q,
+      top_k,
+    });
+    return Response.json({ memories });
+  }
+
   private consequenceSeverity(guest: Guest): number {
     // §5.2 step 3: blend the guest's consequence state into the mood.
-    // Phase 1 uses a count proxy; Phase 2 layers in severity weights
-    // pulled from ConsequenceType.affects_factory_opinion.
+    // Phase 1 uses a count proxy; Phase 2 layers in severity weights.
     return Math.min(1, guest.consequences.length / 5);
   }
 
@@ -217,4 +364,8 @@ export class GuestSessionDO implements DurableObject {
       respawn_count: 0,
     };
   }
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
 }
