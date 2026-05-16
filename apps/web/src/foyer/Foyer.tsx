@@ -101,46 +101,91 @@ export function Foyer({ onEntered }: FoyerProps) {
     <>
       <Canvas
         shadows
-        camera={{ position: [0, 1.7, 5], fov: 50 }}
+        camera={{ position: [0, 1.7, 5], fov: 55 }}
         style={{ width: '100vw', height: '100vh' }}
       >
         <Suspense fallback={null}>
-          <color attach="background" args={['#1a1410']} />
-          <fog attach="fog" args={['#1a1410', 6, 18]} />
-          <ambientLight intensity={0.15} />
-          <directionalLight position={[3, 5, 2]} intensity={0.6} color="#f6e7c3" castShadow />
-          <FoyerFloor />
-          <PortalWall />
-          <PortalDoor position={[0, 1.2, -3.5]} />
+          <color attach="background" args={['#241a13']} />
+          <fog attach="fog" args={['#241a13', 12, 30]} />
+          {/* §12.3 warm low-key lighting. Lifted from the previous
+              near-black levels so the foyer is actually legible. */}
+          <ambientLight intensity={0.55} color="#f6e7c3" />
+          <directionalLight
+            position={[3, 6, 4]}
+            intensity={0.9}
+            color="#f6e7c3"
+            castShadow
+            shadow-mapSize-width={1024}
+            shadow-mapSize-height={1024}
+          />
+          <pointLight position={[-3, 2.4, 0]} intensity={0.55} color="#f6c97f" distance={9} />
+          <pointLight position={[3, 2.4, 0]} intensity={0.55} color="#f6c97f" distance={9} />
+          <FoyerShell />
+          <PortalDoor position={[0, 1.2, -3.9]} />
           <CoPresenceGhosts presence={factory.presence} />
-          <Sign position={[-0.8, 2.4, -3.45]} text={aimed?.name ?? ''} />
+          <Sign position={[-1.8, 2.6, -3.95]} text={aimed?.name ?? ''} />
           <NamePlate
-            position={[1.6, 1.8, -3.45]}
+            position={[1.8, 2.4, -3.95]}
             text={aimed?.name ?? '—'}
             {...(aimed?.typography ? { typography: aimed.typography } : {})}
           />
           {entries.length > 0 && (
             <BrassDial
-              position={[1.6, 1.2, -3.4]}
+              position={[1.8, 1.3, -3.92]}
               entries={entries}
               onAim={handleAim}
               onSettle={handleSettle}
             />
           )}
+          {/* §8.2: orbit + zoom + pan so the guest can look around.
+              Phase 3 will swap this for a Rapier character controller
+              (§13.4); for Phase 2 smoke-test we lean on drei's helper. */}
           <OrbitControls
-            enablePan={false}
-            enableZoom={false}
-            minPolarAngle={Math.PI / 2.5}
-            maxPolarAngle={Math.PI / 1.9}
+            enablePan
+            enableZoom
+            target={[0, 1.5, -3]}
+            minDistance={2}
+            maxDistance={10}
+            minPolarAngle={Math.PI / 3.2}
+            maxPolarAngle={Math.PI / 1.7}
           />
         </Suspense>
       </Canvas>
       <TicketStub />
+      <ControlsHint />
       {greeting ? <SubtitleOverlay speaker={greeting.speaker} text={greeting.text} /> : null}
       {settled ? (
         <OpenDoorAffordance name={settled.name} disabled={crossing} onOpen={handleOpenDoor} />
       ) : null}
     </>
+  );
+}
+
+// §6 diegetic-over-chrome — minimum chrome. A short controls hint
+// for the smoke test; it can be styled out later.
+function ControlsHint() {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: '1rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        color: '#f6e7c3',
+        fontFamily: 'serif',
+        fontSize: '0.8rem',
+        letterSpacing: '0.06em',
+        opacity: 0.55,
+        pointerEvents: 'none',
+        textShadow: '0 1px 4px rgba(0,0,0,0.7)',
+        textAlign: 'center',
+        lineHeight: 1.5,
+      }}
+    >
+      drag empty space to look — scroll to zoom — right-drag to pan
+      <br />
+      drag the brass dial to choose a room
+    </div>
   );
 }
 
@@ -181,20 +226,41 @@ function OpenDoorAffordance({
   );
 }
 
-function FoyerFloor() {
+// §8.1: the foyer is hand-authored. Phase 1 placeholder — a boxed-in
+// rectangular room with the Portal Wall at -Z, sized so the camera
+// can pan/zoom around inside without seeing the void.
+function FoyerShell() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[30, 30]} />
-      <meshStandardMaterial color="#2a1f17" roughness={0.9} />
-    </mesh>
-  );
-}
-
-function PortalWall() {
-  return (
-    <mesh position={[0, 2, -4]} receiveShadow>
-      <planeGeometry args={[12, 6]} />
-      <meshStandardMaterial color="#3a2a1c" roughness={0.85} />
-    </mesh>
+    <group>
+      {/* Floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[14, 14]} />
+        <meshStandardMaterial color="#3a2a1c" roughness={0.9} />
+      </mesh>
+      {/* Back wall (Portal Wall) */}
+      <mesh position={[0, 2.5, -4]} receiveShadow>
+        <planeGeometry args={[14, 5]} />
+        <meshStandardMaterial color="#4a3424" roughness={0.85} />
+      </mesh>
+      {/* Side walls */}
+      <mesh position={[-7, 2.5, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[14, 5]} />
+        <meshStandardMaterial color="#4a3424" roughness={0.85} />
+      </mesh>
+      <mesh position={[7, 2.5, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[14, 5]} />
+        <meshStandardMaterial color="#4a3424" roughness={0.85} />
+      </mesh>
+      {/* Front wall (behind the camera) */}
+      <mesh position={[0, 2.5, 7]} rotation={[0, Math.PI, 0]} receiveShadow>
+        <planeGeometry args={[14, 5]} />
+        <meshStandardMaterial color="#4a3424" roughness={0.85} />
+      </mesh>
+      {/* Ceiling */}
+      <mesh position={[0, 5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[14, 14]} />
+        <meshStandardMaterial color="#2a1f17" roughness={0.95} />
+      </mesh>
+    </group>
   );
 }
