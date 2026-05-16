@@ -17,6 +17,19 @@ factoryRoutes.get('/mood', async (c) => {
   return new Response(res.body, { status: res.status, headers: res.headers });
 });
 
+// §14.2: WebSocket subscribe. Clients get an immediate snapshot of
+// the mood and foyer co-presence, then live updates as they happen.
+factoryRoutes.get('/subscribe', async (c) => {
+  if (c.req.header('upgrade') !== 'websocket') {
+    return c.json({ error: 'expected_websocket_upgrade' }, 426);
+  }
+  const id = c.env.FACTORY_STATE.idFromName(FACTORY_SINGLETON);
+  const stub = c.env.FACTORY_STATE.get(id);
+  return stub.fetch('https://do/subscribe', {
+    headers: { upgrade: 'websocket' },
+  });
+});
+
 factoryRoutes.put('/mood', async (c) => {
   // Phase 1: any authenticated caller can write; Phase 2 layers in
   // Better-Auth (§17.2) so only Recipe Keepers / the Founder can.

@@ -28,6 +28,19 @@ Phase 2 so far:
 - `RoomAssembler` now surfaces an `accepted_artifacts` list alongside
   the `rejected_artifacts` so the DO can sample without re-running
   the generation.
+- **WebSocket fanout** (§14.2) from the singleton `FactoryStateDO`
+  using the Hibernation API. `GET /factory/subscribe` upgrades the
+  client into a session that receives mood updates immediately on
+  `PUT /factory/mood` (so the Mood Console takes effect live) and
+  foyer co-presence updates whenever a guest enters/leaves.
+- **Co-presence ghosts** (§8.5). The per-guest DO publishes its foyer
+  presence to the singleton on `/start` and clears it on threshold
+  cross. Ghost tokens are SHA-256-derived anonymized ids so the
+  fanout can't be used to track guests. The web client renders
+  faint capsule silhouettes at deterministic positions around the
+  foyer — no interaction, no voice, just witness.
+- Client `useFactoryConnection()` maintains the WebSocket with
+  exponential backoff and exposes `{ mood, presence, connected }`.
 
 What's in tree from Phase 1:
 

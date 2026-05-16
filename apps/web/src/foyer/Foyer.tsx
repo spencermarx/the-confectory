@@ -4,8 +4,10 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { SubtitleOverlay } from '../dialogue/SubtitleOverlay.tsx';
 import { speakToOompaLoompa } from '../dialogue/use-dialogue.ts';
 import { type DialEntry, settleOnShell, useDial } from '../hooks/use-dial.ts';
+import { useFactoryConnection } from '../hooks/use-factory-connection.ts';
 import { emitTelemetry, usePauseDetector } from '../telemetry/use-telemetry.ts';
 import { BrassDial } from './BrassDial.tsx';
+import { CoPresenceGhosts } from './CoPresenceGhosts.tsx';
 import { NamePlate } from './NamePlate.tsx';
 import { PortalDoor } from './PortalDoor.tsx';
 import { Sign } from './Sign.tsx';
@@ -19,6 +21,9 @@ export function Foyer() {
   const entries = dial.data?.entries ?? [];
   const [aimed, setAimed] = useState<DialEntry | null>(null);
   const [greeting, setGreeting] = useState<{ speaker: string; text: string } | null>(null);
+  // §14.2, §8.5: live mood + foyer co-presence over the singleton's
+  // WebSocket fanout.
+  const factory = useFactoryConnection();
 
   const handleAim = useCallback((entry: DialEntry) => setAimed(entry), []);
   const handleSettle = useCallback((entry: DialEntry) => {
@@ -78,6 +83,7 @@ export function Foyer() {
           <FoyerFloor />
           <PortalWall />
           <PortalDoor position={[0, 1.2, -3.5]} />
+          <CoPresenceGhosts presence={factory.presence} />
           <Sign position={[-0.8, 2.4, -3.45]} text={aimed?.name ?? ''} />
           <NamePlate
             position={[1.6, 1.8, -3.45]}

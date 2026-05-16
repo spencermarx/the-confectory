@@ -115,12 +115,38 @@ export class GuestSessionDO implements DurableObject {
 
     await this.state.storage.put<StoredState>('state', stored);
 
+    // §8.5, §14.2: announce foyer presence to the singleton so other
+    // guests' sockets see this ghost. Fire-and-forget — the singleton
+    // is the source of truth for the broadcast.
+    this.state.waitUntil(this.publishPresence(stored.guest.id, 'foyer').catch(() => {}));
+
     return Response.json({
       session_started_at: stored.guest.session_started_at,
       current_location: stored.guest.current_location satisfies GuestLocation,
       respawn_count: stored.guest.respawn_count,
       visit_count: stored.guest.visited_shell_ids.length,
       session_count: stored.session_count,
+    });
+  }
+
+  private async publishPresence(guest_id: string, location: 'foyer' | 'elsewhere'): Promise<void> {
+    // §8.5: ghost token is a stable but anonymized id — Phase 2 derives
+    // it from the guest id via SHA-256 so co-presence can't be used to
+    // track guests across the factory.
+    const tokenBytes = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(`ghost:${guest_id}`),
+    );
+    const ghost_token = [...new Uint8Array(tokenBytes)]
+      .slice(0, 6)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    const id = this.env.FACTORY_STATE.idFromName('global');
+    const stub = this.env.FACTORY_STATE.get(id);
+    await stub.fetch('https://do/presence', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ guest_id, location, ghost_token }),
     });
   }
 
@@ -270,6 +296,10 @@ export class GuestSessionDO implements DurableObject {
       speculative_cache: cache,
     };
     await this.state.storage.put<StoredState>('state', next);
+
+    // §8.5: guest left the foyer for an interior room; drop them from
+    // the foyer co-presence broadcast.
+    this.state.waitUntil(this.publishPresence(stored.guest.id, 'elsewhere').catch(() => {}));
 
     // §5.1 step 6: as soon as the guest is in the new room, kick off
     // pre-generation of the new room's downstream rooms. Phase 2 fires
