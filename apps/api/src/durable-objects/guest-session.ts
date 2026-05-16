@@ -1,4 +1,9 @@
-import { type DialEntry, resonantLayout } from '@confectory/shared';
+import {
+  type DialEntry,
+  planSpeculation,
+  rankDoorsByLikelihood,
+  resonantLayout,
+} from '@confectory/shared';
 import type { ConsequenceTypeId, Guest, GuestLocation, ShellId } from '@confectory/shared';
 import { recordConsequence, recordMark, recordVisit, upsertGuest } from '../db/guest-store.ts';
 import {
@@ -327,13 +332,41 @@ export class GuestSessionDO implements DurableObject {
     // the foyer co-presence broadcast.
     this.state.waitUntil(this.publishPresence(stored.guest.id, 'elsewhere').catch(() => {}));
 
-    // §5.1 step 6: as soon as the guest is in the new room, kick off
-    // pre-generation of the new room's downstream rooms. Phase 2 fires
-    // for each resolved door; Phase 3 (§22.1) layers in the prediction
-    // model that ranks door likelihood.
+    // §5.1 step 6 + §22.1: as soon as the guest is in the new room,
+    // kick off pre-generation of the downstream rooms. Phase 3 ranks
+    // the doors by guest-history-conditioned likelihood and eager-
+    // generates only the top 2. The "light" tail is deferred until
+    // either (a) the guest dwells long enough for the speculative
+    // budget to absorb them, or (b) the guest actually crosses one.
+    const visitCounts: Record<string, number> = {};
+    for (const id of next.guest.visited_shell_ids) {
+      visitCounts[id] = (visitCounts[id] ?? 0) + 1;
+    }
+    const shellDoorFeel: Record<
+      string,
+      { feel: 'heavy' | 'light' | 'reluctant' | 'eager' | 'silent' | 'creaking' }
+    > = {};
     for (const door of manifest.resolved_doors) {
+      const destShell = getShell(door.destination_shell_id);
+      if (destShell) {
+        const matchingDoor = destination.doors.find((d) => d.id === door.door_slot_id);
+        if (matchingDoor) shellDoorFeel[door.destination_shell_id] = { feel: matchingDoor.feel };
+      }
+    }
+    const ranked = rankDoorsByLikelihood({
+      doors: manifest.resolved_doors,
+      shell_door_feel: shellDoorFeel,
+      visited_shell_ids: next.guest.visited_shell_ids,
+      visit_count_per_shell: visitCounts,
+    });
+    const plan = planSpeculation(ranked, { eager_top_k: 2 });
+    for (const door of plan.eager) {
       this.state.waitUntil(this.precomputeManifest(door.destination_shell_id).catch(() => {}));
     }
+    // The `light` tail is recorded but not eagerly generated. The
+    // threshold handler will fall through to synchronous assembly if
+    // the guest commits to one of these doors — acceptable because
+    // the §22.1 hypothesis is that likelihood << 0.5 for the tail.
 
     // §22.3, §6.2: slow Critic at 25% sample on accepted artifacts.
     // Skip when served from cache — those artifacts were sampled when

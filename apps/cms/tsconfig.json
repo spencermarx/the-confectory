@@ -4,7 +4,9 @@
     "lib": ["ES2023", "DOM"],
     "jsx": "preserve",
     "module": "ESNext",
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "declaration": false,
+    "declarationMap": false
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "payload.config.ts"]
 }

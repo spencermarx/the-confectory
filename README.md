@@ -6,10 +6,27 @@ state of the implementation.
 
 ## Status
 
-**Phase 2 substantially complete.** See
-[`docs/phase-2-plan.md`](./docs/phase-2-plan.md) for the working
-plan and what remains; [`docs/phase-1-close.md`](./docs/phase-1-close.md)
-summarizes how Phase 1 closed.
+**Phase 2 complete. Phase 3 in progress.** See
+[`docs/phase-3-plan.md`](./docs/phase-3-plan.md) for the working
+Phase 3 plan; [`docs/phase-2-plan.md`](./docs/phase-2-plan.md)
+summarizes how Phase 2 closed;
+[`docs/phase-1-close.md`](./docs/phase-1-close.md) summarizes
+how Phase 1 closed.
+
+Phase 3 so far:
+
+- **Door-likelihood predictor** (§22.1) in `@confectory/shared/engine`:
+  ranks doors by guest-history-conditioned likelihood blending
+  recency affinity, a novelty bonus for unvisited destinations, and
+  a door-feel bias (`eager` > `light` > … > `heavy`). The DO now
+  eager-generates only the top 2 ranked doors via
+  `planSpeculation()`; the light tail falls through to synchronous
+  assembly on commit. First step of the §22.1 cost optimization.
+- **Better-Auth integration** for Recipe Keepers (§17.2) — was the
+  Phase 2 carryover, landed at the start of Phase 3. Passkey-only
+  against the same Postgres as Payload; a custom `AuthStrategy`
+  reads the Better-Auth session cookie and builds the Payload user
+  envelope.
 
 Phase 2 landed:
 

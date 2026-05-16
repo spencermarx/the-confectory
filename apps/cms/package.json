@@ -14,9 +14,13 @@
     "@payloadcms/db-postgres": "3.18.0",
     "@payloadcms/next": "3.18.0",
     "@payloadcms/richtext-lexical": "3.18.0",
-    "payload": "3.18.0"
+    "@better-auth/passkey": "1.6.11",
+    "better-auth": "1.6.11",
+    "payload": "3.18.0",
+    "pg": "8.13.1"
   },
   "devDependencies": {
+    "@types/pg": "8.11.10",
     "@types/react": "19.0.2",
     "@types/react-dom": "19.0.2",
     "typescript": "5.7.2"

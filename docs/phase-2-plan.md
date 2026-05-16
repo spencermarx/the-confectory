@@ -42,9 +42,7 @@ ships when it's right, not on a date.
 
 ### Identity
 
-- 🟡 **Better-Auth integration** for Recipe Keepers (§17.2). Still
-  open — Payload's built-in auth is the Phase 2 shim. Tracked above
-  under "Still open".
+- ✅ **Better-Auth integration** — see "Still open" above (landed).
 
 ### World
 
@@ -53,9 +51,11 @@ ships when it's right, not on a date.
 
 ### Still open
 
-- **Better-Auth integration** for Recipe Keepers (§17.2). Payload's
-  built-in auth is the Phase 2 shim; Better-Auth swap is the one
-  remaining Phase 2 plan item. Carried into a Phase 2.1 patch.
+- ✅ **Better-Auth integration** for Recipe Keepers (§17.2) — landed.
+  `apps/cms/src/auth/` configures a passkey-only Better-Auth instance
+  against the same Postgres as Payload; a Payload `AuthStrategy`
+  reads the Better-Auth session cookie and constructs the Payload
+  user envelope. Email/password is disabled on Users.
 
 ### Operations
 

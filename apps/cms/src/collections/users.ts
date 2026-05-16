@@ -1,11 +1,16 @@
 import type { CollectionConfig } from 'payload';
+import { betterAuthStrategy } from '../auth/payload-strategy.ts';
 
-// §3.5, §17.2: Recipe Keepers auth via Better-Auth (passkeys).
-// Phase 1 of the CMS uses Payload's built-in auth as the temporary
-// shim while Better-Auth integration lands. Replaced before launch.
+// §3.5, §17.2: Recipe Keepers auth via Better-Auth (passkeys). The
+// custom strategy reads the Better-Auth session cookie and constructs
+// a Payload user envelope. Payload's built-in email/password is
+// disabled so the only path in is the passkey flow.
 export const Users: CollectionConfig = {
   slug: 'users',
-  auth: true,
+  auth: {
+    disableLocalStrategy: true,
+    strategies: [betterAuthStrategy],
+  },
   admin: {
     useAsTitle: 'email',
   },
