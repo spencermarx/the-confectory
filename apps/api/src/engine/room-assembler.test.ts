@@ -72,6 +72,10 @@ describe('RoomAssembler', () => {
     expect(result.generated_surfaces.wallpaper).toMatch(/^generated\/the-hush-before\/wallpaper/);
     expect(result.served_from_fallback).toBe(false);
     expect(result.rejected_artifacts).toHaveLength(0);
+    // §22.3 emit-feed: accepted_artifacts surfaces the sign + each
+    // surface that was generated (and accepted) for slow Critic sampling.
+    expect(result.accepted_artifacts.length).toBeGreaterThan(0);
+    expect(result.accepted_artifacts.some((a) => a.kind === 'sign')).toBe(true);
   });
 
   it('retries once on rejection for a branching shell and accepts the retry', async () => {

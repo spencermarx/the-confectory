@@ -13,5 +13,14 @@ export interface Env {
 
 export type BackgroundJob =
   | { kind: 'summarize_session'; guest_id: string }
-  | { kind: 'slow_critic_review'; artifact_id: string }
+  | {
+      kind: 'slow_critic_review';
+      shell_id: string;
+      shell_name: string;
+      character_id?: string;
+      canonical_room_names: string[];
+      artifact: string;
+      artifact_kind: 'sign' | 'surface' | 'dialogue';
+      surface_slot?: string;
+    }
   | { kind: 'asset_processing'; r2_key: string };

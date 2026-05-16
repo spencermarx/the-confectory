@@ -19,6 +19,9 @@ interface StoredState {
   pending_settle?: { shell_id: ShellId; at: number };
   current_manifest?: AssembledRoom;
   session_events: SessionEvent[];
+  // §5.2: cached speculative pre-generations, keyed by shell_id.
+  // TTL of one minute per §5.2; older entries are pruned on read.
+  speculative_cache?: Record<ShellId, { manifest: AssembledRoom; cached_at: number }>;
 }
 
 interface DialRequestBody {
@@ -148,7 +151,8 @@ export class GuestSessionDO implements DurableObject {
     return Response.json({ entries, session_count: stored.session_count });
   }
 
-  // §8.2: settle on a name.
+  // §8.2, §5.2: settle on a name. Kicks off speculative pre-generation
+  // of that destination so the threshold crossing returns instantly.
   private async handleSettle(request: Request): Promise<Response> {
     const body = (await request.json()) as SettleRequestBody;
     const stored = await this.state.storage.get<StoredState>('state');
@@ -159,26 +163,27 @@ export class GuestSessionDO implements DurableObject {
       pending_settle: { shell_id: body.shell_id, at: Date.now() },
     };
     await this.state.storage.put<StoredState>('state', next);
+
+    // Fire-and-forget pre-gen. The 8s soft budget per §5.2 is enforced
+    // by the assembler's per-call latency; if the guest crosses the
+    // threshold first, the threshold handler falls through to synchronous
+    // assembly. waitUntil keeps the work alive past the response.
+    this.state.waitUntil(this.precomputeManifest(body.shell_id).catch(() => {}));
+
     return Response.json({ pending_settle: next.pending_settle });
   }
 
-  // §5.1: threshold crossed.
-  private async handleThreshold(request: Request): Promise<Response> {
-    const body = (await request.json()) as ThresholdRequestBody;
+  // §5.2: speculative pre-generation. Computes the destination manifest
+  // and caches it on the guest. Idempotent: a fresh cache entry shadows
+  // any older one for the same shell.
+  private async precomputeManifest(shell_id: ShellId): Promise<void> {
     const stored = await this.state.storage.get<StoredState>('state');
-    if (!stored) return new Response('no_session', { status: 404 });
+    if (!stored) return;
+    const destination = getShell(shell_id);
+    if (!destination) return;
 
-    const destination = getShell(body.destination_shell_id);
-    if (!destination) return new Response('unknown_shell', { status: 404 });
-    const candidates = body.candidate_shell_ids
-      .map((id) => getShell(id))
-      .filter((s): s is NonNullable<typeof s> => Boolean(s));
-
-    const factoryId = this.env.FACTORY_STATE.idFromName('global');
-    const factoryStub = this.env.FACTORY_STATE.get(factoryId);
-    const factoryRes = await factoryStub.fetch('https://do/mood');
-    const factoryMood = (await factoryRes.json()) as ReturnType<typeof JSON.parse>;
-
+    const candidates = this.allDialShells();
+    const factoryMood = await this.fetchFactoryMood();
     const manifest = await this.assembler.assemble({
       shell: destination,
       guest_id: this.state.id.toString(),
@@ -189,7 +194,68 @@ export class GuestSessionDO implements DurableObject {
       available_ol_ids: Object.keys(stored.guest.oompa_loompa_relationships),
     });
 
+    // Re-read the latest stored state in case other handlers ran while
+    // we were assembling. Re-apply the cache delta and write back.
+    const latest = (await this.state.storage.get<StoredState>('state')) ?? stored;
+    const cache = pruneCache(latest.speculative_cache, Date.now());
+    cache[shell_id] = { manifest, cached_at: Date.now() };
+    await this.state.storage.put<StoredState>('state', { ...latest, speculative_cache: cache });
+  }
+
+  private allDialShells(): NonNullable<ReturnType<typeof getShell>>[] {
+    // Loaded lazily — the shell registry is in-memory in Phase 1.
+    // Phase 2.1 promotes this into a KV-backed read so Recipe Keeper
+    // edits flow without redeploying (§3.4).
+    const ids = ['the-hush-before', 'the-treacle-deep', 'the-foundry-door', 'the-elevator'];
+    return ids.map((id) => getShell(id)).filter((s): s is NonNullable<typeof s> => Boolean(s));
+  }
+
+  private async fetchFactoryMood(): Promise<ReturnType<typeof JSON.parse>> {
+    const factoryId = this.env.FACTORY_STATE.idFromName('global');
+    const factoryStub = this.env.FACTORY_STATE.get(factoryId);
+    const factoryRes = await factoryStub.fetch('https://do/mood');
+    return factoryRes.json();
+  }
+
+  // §5.1: threshold crossed. Checks the speculative cache first (§5.2);
+  // falls through to synchronous assembly only if the cache misses.
+  private async handleThreshold(request: Request): Promise<Response> {
+    const body = (await request.json()) as ThresholdRequestBody;
+    const stored = await this.state.storage.get<StoredState>('state');
+    if (!stored) return new Response('no_session', { status: 404 });
+
+    const destination = getShell(body.destination_shell_id);
+    if (!destination) return new Response('unknown_shell', { status: 404 });
+
     const now = Date.now();
+    const cache = pruneCache(stored.speculative_cache, now);
+    const cached = cache[destination.id];
+    let manifest: AssembledRoom;
+    let served_from_cache = false;
+    if (cached) {
+      manifest = cached.manifest;
+      served_from_cache = true;
+    } else {
+      const candidates = body.candidate_shell_ids
+        .map((id) => getShell(id))
+        .filter((s): s is NonNullable<typeof s> => Boolean(s));
+      const factoryMood = await this.fetchFactoryMood();
+      manifest = await this.assembler.assemble({
+        shell: destination,
+        guest_id: this.state.id.toString(),
+        candidate_shells: candidates,
+        factory_mood: factoryMood,
+        guest_consequence_severity: this.consequenceSeverity(stored.guest),
+        guest_consequences: new Set(stored.guest.consequences.map((c) => c.type)),
+        available_ol_ids: Object.keys(stored.guest.oompa_loompa_relationships),
+      });
+    }
+
+    // §5.3: commit the destination. Discard the cached entry we just
+    // consumed; other speculative entries stay for the 10s grace
+    // period the spec calls out (the TTL prune handles eviction).
+    delete cache[destination.id];
+
     const { pending_settle: _settled, ...rest } = stored;
     const next: StoredState = {
       ...rest,
@@ -201,12 +267,45 @@ export class GuestSessionDO implements DurableObject {
         visited_shell_ids: [...stored.guest.visited_shell_ids, destination.id],
       },
       current_manifest: manifest,
+      speculative_cache: cache,
     };
     await this.state.storage.put<StoredState>('state', next);
+
+    // §5.1 step 6: as soon as the guest is in the new room, kick off
+    // pre-generation of the new room's downstream rooms. Phase 2 fires
+    // for each resolved door; Phase 3 (§22.1) layers in the prediction
+    // model that ranks door likelihood.
+    for (const door of manifest.resolved_doors) {
+      this.state.waitUntil(this.precomputeManifest(door.destination_shell_id).catch(() => {}));
+    }
+
+    // §22.3, §6.2: slow Critic at 25% sample on accepted artifacts.
+    // Skip when served from cache — those artifacts were sampled when
+    // the cache entry was originally produced.
+    if (!served_from_cache) {
+      const canonicalNames = body.candidate_shell_ids
+        .map((id) => getShell(id)?.name)
+        .filter((n): n is string => Boolean(n));
+      for (const artifact of manifest.accepted_artifacts) {
+        if (Math.random() >= 0.25) continue;
+        this.state.waitUntil(
+          this.env.BACKGROUND.send({
+            kind: 'slow_critic_review',
+            shell_id: destination.id,
+            shell_name: destination.name,
+            canonical_room_names: canonicalNames,
+            artifact: artifact.artifact,
+            artifact_kind: artifact.kind,
+            ...(artifact.surface_slot ? { surface_slot: artifact.surface_slot } : {}),
+          }).catch(() => {}),
+        );
+      }
+    }
 
     return Response.json({
       room_id: next.guest.current_room_id,
       manifest,
+      served_from_cache,
     });
   }
 
@@ -368,4 +467,23 @@ export class GuestSessionDO implements DurableObject {
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
+}
+
+// §5.2: speculative cache TTL is one minute. Entries older than that
+// are evicted on every read so we never serve a stale mood-conditioned
+// manifest.
+const SPECULATIVE_TTL_MS = 60_000;
+
+function pruneCache(
+  cache: StoredState['speculative_cache'],
+  now: number,
+): NonNullable<StoredState['speculative_cache']> {
+  const next: Record<string, { manifest: AssembledRoom; cached_at: number }> = {};
+  if (!cache) return next;
+  for (const [id, entry] of Object.entries(cache)) {
+    if (now - entry.cached_at <= SPECULATIVE_TTL_MS) {
+      next[id] = entry;
+    }
+  }
+  return next;
 }

@@ -6,11 +6,30 @@ state of the implementation.
 
 ## Status
 
-**Phase 1 complete — Weeks 1-16 (§21.1-§21.7).** See
-[`docs/phase-1-close.md`](./docs/phase-1-close.md) for the close-out
-summary and Phase 2 scope decisions.
+**Phase 2 in progress.** See [`docs/phase-2-plan.md`](./docs/phase-2-plan.md)
+for the working plan; [`docs/phase-1-close.md`](./docs/phase-1-close.md)
+summarizes how Phase 1 closed.
 
-What's in tree:
+Phase 2 so far:
+
+- **Speculative pre-generation** (§5.1 step 6, §5.2). `/settle` kicks
+  background pre-gen for the settled destination via `state.waitUntil`;
+  `/threshold` returns served-from-cache instantly in the 95% case
+  and otherwise falls through to synchronous assembly. On commit,
+  every resolved downstream door is pre-generated for the next hop.
+  Cache TTL is one minute (§5.2); consumed entries evict on commit
+  (§5.3).
+- **Slow Critic at 25% sample** (§22.3, §6.2). The Queue consumer in
+  the Worker processes `slow_critic_review` jobs; verdicts below 0.6
+  land in the Critic's Notebook automatically. `InProcessSlowCritic`
+  is the Phase 2 default; `AnthropicSlowCritic` against Claude Opus
+  4.7 is wired and ready behind the same `SlowCriticProvider`
+  interface (§3.3, §10.4).
+- `RoomAssembler` now surfaces an `accepted_artifacts` list alongside
+  the `rejected_artifacts` so the DO can sample without re-running
+  the generation.
+
+What's in tree from Phase 1:
 
 Foundations (Week 1-2, §21.1):
 

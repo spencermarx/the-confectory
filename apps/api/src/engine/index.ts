@@ -20,6 +20,12 @@ export type {
   CriticVerdict,
   CriticRequest,
 } from './providers/types.ts';
+export { InProcessSlowCritic, AnthropicSlowCritic } from './providers/slow-critic.ts';
+export type {
+  SlowCriticInput,
+  SlowCriticProvider,
+  SlowCriticVerdict,
+} from './providers/slow-critic.ts';
 export { applyConsequence } from './consequence-engine.ts';
 export type {
   ApplyConsequenceInput,

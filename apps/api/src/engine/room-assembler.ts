@@ -39,6 +39,7 @@ export interface AssembledRoom {
   sign_text: string;
   generated_surfaces: Record<SurfaceSlot, string>;
   rejected_artifacts: RejectedArtifact[];
+  accepted_artifacts: AcceptedArtifact[];
   served_from_fallback: boolean;
 }
 
@@ -49,6 +50,15 @@ export interface RejectedArtifact {
   shell_id: ShellId;
   surface_slot?: string;
   attempts: number;
+}
+
+export interface AcceptedArtifact {
+  // §6.2: feeds the slow Critic queue. The producer reads this list
+  // off the manifest and samples per §22.3.
+  kind: 'sign' | 'surface' | 'dialogue';
+  shell_id: ShellId;
+  surface_slot?: string;
+  artifact: string;
 }
 
 export interface RoomAssemblerOptions {
@@ -106,10 +116,12 @@ export class RoomAssembler {
       { retry_budget: retryBudget },
     );
 
+    const accepted: AcceptedArtifact[] = [];
     let signText: string;
     let servedFromFallback = false;
     if (signOutcome.status === 'accepted') {
       signText = signOutcome.artifact;
+      accepted.push({ kind: 'sign', shell_id: input.shell.id, artifact: signText });
     } else {
       rejected.push({
         kind: 'sign',
@@ -148,6 +160,12 @@ export class RoomAssembler {
       );
       if (outcome.status === 'accepted') {
         surfaces[slot] = outcome.artifact;
+        accepted.push({
+          kind: 'surface',
+          shell_id: input.shell.id,
+          surface_slot: slot,
+          artifact: outcome.artifact,
+        });
       } else {
         rejected.push({
           kind: 'surface',
@@ -173,6 +191,7 @@ export class RoomAssembler {
       sign_text: signText,
       generated_surfaces: surfaces,
       rejected_artifacts: rejected,
+      accepted_artifacts: accepted,
       served_from_fallback: servedFromFallback,
     };
   }
