@@ -11,8 +11,16 @@ pnpm install
 pnpm smoke
 ```
 
-Then open **http://localhost:5173**. See
-[`docs/smoke-test.md`](./docs/smoke-test.md) for what works, what's
+That brings up two processes: the Worker API on **:8787** and the
+Vite web app on **:5173**. Open the web app — it proxies API calls
+through to the Worker for you:
+
+> **http://localhost:5173**
+
+(:8787 is the API only; hitting it directly just shows a redirect
+notice. The web app is :5173.)
+
+See [`docs/smoke-test.md`](./docs/smoke-test.md) for what works, what's
 stubbed, and how to bring up the Recipe Keeper console.
 
 ## Status

@@ -16,6 +16,19 @@ import { logRejection } from './telemetry/critic-notebook.ts';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Friendly root response — most people hitting :8787 directly meant
+// to open the web app at :5173. Give them a nudge instead of 404.
+app.get('/', (c) =>
+  c.html(`<!doctype html><html><head><meta charset="utf-8" /><title>The Confectory — API</title>
+<style>body{background:#1a1410;color:#f6e7c3;font-family:serif;display:grid;place-items:center;height:100vh;margin:0;letter-spacing:.04em;line-height:1.6}main{max-width:32rem;padding:2rem;text-align:center}a{color:#f6c97f}</style>
+</head><body><main>
+<h1 style="font-style:italic;margin-top:0">The Confectory — API</h1>
+<p>You've reached the worker. The guest-facing app lives at
+<a href="http://localhost:5173">http://localhost:5173</a>.</p>
+<p style="opacity:.6;font-size:.85rem">environment: ${c.env.ENVIRONMENT}</p>
+</main></body></html>`),
+);
+
 app.route('/health', healthRoutes);
 app.route('/session', sessionRoutes);
 app.route('/foyer', foyerRoutes);
