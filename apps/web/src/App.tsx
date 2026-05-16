@@ -1,8 +1,19 @@
+import { useCallback, useState } from 'react';
 import { Foyer } from './foyer/Foyer.tsx';
 import { useStartSession } from './hooks/use-session.ts';
+import type { ThresholdResponse } from './hooks/use-threshold.ts';
+import { InteriorRoom } from './room/InteriorRoom.tsx';
 
 export function App() {
   const session = useStartSession();
+  const [room, setRoom] = useState<ThresholdResponse | null>(null);
+
+  const handleEntered = useCallback((response: ThresholdResponse) => {
+    setRoom(response);
+  }, []);
+  const handleReturnToFoyer = useCallback(() => {
+    setRoom(null);
+  }, []);
 
   if (session.isPending) {
     return <Loading message="The factory is opening for you." />;
@@ -11,7 +22,10 @@ export function App() {
     return <Loading message="The doors are stuck. Try again." />;
   }
 
-  return <Foyer />;
+  if (room) {
+    return <InteriorRoom manifest={room.manifest} onReturnToFoyer={handleReturnToFoyer} />;
+  }
+  return <Foyer onEntered={handleEntered} />;
 }
 
 function Loading({ message }: { message: string }) {

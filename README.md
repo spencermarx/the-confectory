@@ -4,6 +4,17 @@ This is the working monorepo for The Confectory. The architecture is specified
 in [`arch-t-spec.md`](./arch-t-spec.md). This README documents the current
 state of the implementation.
 
+## Try it
+
+```bash
+pnpm install
+pnpm smoke
+```
+
+Then open **http://localhost:5173**. See
+[`docs/smoke-test.md`](./docs/smoke-test.md) for what works, what's
+stubbed, and how to bring up the Recipe Keeper console.
+
 ## Status
 
 **Phase 2 complete. Phase 3 in progress.** See

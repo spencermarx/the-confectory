@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=@confectory/api --filter=@confectory/web",
+    "dev:cms": "pnpm --filter @confectory/cms dev",
+    "smoke": "turbo run dev --filter=@confectory/api --filter=@confectory/web",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",

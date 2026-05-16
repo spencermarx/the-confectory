@@ -77,11 +77,11 @@ export class GuestSessionDO implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
-    // §3.3: provider activation. When the AI binding is present we
-    // use the production WorkersAI providers; otherwise we keep the
-    // deterministic in-process pair so local dev stays fast and tests
-    // stay reproducible.
-    if (env.AI) {
+    // §3.3: provider activation. Production (env.AI bound AND we're
+    // outside dev) uses the WorkersAI providers; local dev defaults
+    // to the deterministic in-process pair so the smoke test works
+    // without Cloudflare auth.
+    if (env.AI && env.ENVIRONMENT !== 'development') {
       const aiRunner = env.AI as unknown as {
         run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
       };
