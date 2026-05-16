@@ -88,6 +88,20 @@ export const TELEMETRY_SIGNALS: readonly TelemetrySignal[] = [
     collected_via: 'server',
     unit: 'count',
   },
+  // §18.3: per-session cost SLO. Phase 3 instrumentation; the target
+  // is <$0.40 (40c) p95 cost-per-session at steady state.
+  {
+    name: 'session_cost_cents',
+    description: 'Estimated AI/TTS spend in cents for this guest session, cumulative.',
+    collected_via: 'server',
+    unit: 'count',
+  },
+  {
+    name: 'generation_cost_cents',
+    description: 'Estimated AI/TTS spend in cents for a single generation call.',
+    collected_via: 'server',
+    unit: 'count',
+  },
 ] as const;
 
 export type TelemetrySignalName = (typeof TELEMETRY_SIGNALS)[number]['name'];

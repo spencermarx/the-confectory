@@ -1,3 +1,4 @@
+import { type PhaseBand, adaptiveSampleRate, targetBandFor } from '@confectory/shared';
 import { Hono } from 'hono';
 import type { Env } from '../env.ts';
 import { logRejection, recentRejections } from '../telemetry/critic-notebook.ts';
@@ -49,4 +50,45 @@ criticRoutes.get('/recent', async (c) => {
     ...(reason ? { reason } : {}),
   });
   return c.json({ entries });
+});
+
+// §22.3, §6.3: recompute the adaptive slow-Critic sample rate from
+// the trailing Critic's Notebook stats and publish it to the
+// singleton FactoryStateDO. Phase 3 calls this from an ops cron;
+// Phase 4 may schedule it via cron triggers in the Worker.
+criticRoutes.post('/retune', async (c) => {
+  const phase = (c.req.query('phase') as PhaseBand | null) ?? 'phase_3';
+  const entries = await recentRejections(c.env.DB, { limit: 200 });
+  const trailing_flagged = entries.length;
+  // Approximate the accepted denominator from the per-guest visit
+  // count over the same window — Phase 3 will switch to an
+  // Analytics Engine count once that pipeline is queryable.
+  const acceptedRow = (await c.env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM guest_visits WHERE entered_at > ?',
+  )
+    .bind(Date.now() - 24 * 60 * 60 * 1000)
+    .all<{ n: number }>()) as unknown as { results: Array<{ n: number }> };
+  const trailing_accepted = Math.max(0, (acceptedRow.results[0]?.n ?? 0) - trailing_flagged);
+
+  const factoryId = c.env.FACTORY_STATE.idFromName('global');
+  const factoryStub = c.env.FACTORY_STATE.get(factoryId);
+  const currentRes = await factoryStub.fetch('https://do/sample-rate');
+  const current = ((await currentRes.json()) as { rate: number }).rate;
+  const result = adaptiveSampleRate({
+    trailing_flagged,
+    trailing_accepted,
+    target_band: targetBandFor(phase),
+    current_rate: current,
+  });
+  await factoryStub.fetch('https://do/sample-rate', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ rate: result.next_rate }),
+  });
+  return c.json({
+    next_rate: result.next_rate,
+    flagged_rate: result.flagged_rate,
+    reason: result.reason,
+    sample_window: { trailing_flagged, trailing_accepted },
+  });
 });

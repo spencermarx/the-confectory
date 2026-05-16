@@ -4,6 +4,10 @@ import type { Env } from '../env.ts';
 interface FactoryState {
   mood: MoodVector;
   founder_present_in?: string;
+  // §22.3, §6.3: adaptive slow-Critic sample rate. Set by the
+  // /sample-rate handler from the trailing Critic's Notebook stats;
+  // the per-guest DO reads it before each sampling decision.
+  slow_critic_sample_rate: number;
   updated_at: number;
 }
 
@@ -86,6 +90,25 @@ export class FactoryStateDO implements DurableObject {
       return Response.json({ ok: true });
     }
 
+    if (url.pathname === '/sample-rate' && request.method === 'GET') {
+      const factory = await this.load();
+      return Response.json({ rate: factory.slow_critic_sample_rate });
+    }
+    if (url.pathname === '/sample-rate' && request.method === 'PUT') {
+      const factory = await this.load();
+      const body = (await request.json()) as { rate: number };
+      if (typeof body.rate !== 'number' || body.rate < 0 || body.rate > 1) {
+        return new Response('invalid_rate', { status: 400 });
+      }
+      const merged: FactoryState = {
+        ...factory,
+        slow_critic_sample_rate: body.rate,
+        updated_at: Date.now(),
+      };
+      await this.state.storage.put<FactoryState>('state', merged);
+      return Response.json({ rate: merged.slow_critic_sample_rate });
+    }
+
     return new Response('not_found', { status: 404 });
   }
 
@@ -144,8 +167,18 @@ export class FactoryStateDO implements DurableObject {
 
   private async load(): Promise<FactoryState> {
     const existing = await this.state.storage.get<FactoryState>('state');
-    if (existing) return existing;
-    const fresh: FactoryState = { mood: DEFAULT_MOOD, updated_at: Date.now() };
+    if (existing) {
+      // Backfill older state rows that pre-date the sample-rate field.
+      if (typeof existing.slow_critic_sample_rate !== 'number') {
+        return { ...existing, slow_critic_sample_rate: 0.25 };
+      }
+      return existing;
+    }
+    const fresh: FactoryState = {
+      mood: DEFAULT_MOOD,
+      slow_critic_sample_rate: 0.25,
+      updated_at: Date.now(),
+    };
     await this.state.storage.put<FactoryState>('state', fresh);
     return fresh;
   }

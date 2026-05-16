@@ -18,10 +18,22 @@ Phase 3 so far:
 - **Door-likelihood predictor** (§22.1) in `@confectory/shared/engine`:
   ranks doors by guest-history-conditioned likelihood blending
   recency affinity, a novelty bonus for unvisited destinations, and
-  a door-feel bias (`eager` > `light` > … > `heavy`). The DO now
-  eager-generates only the top 2 ranked doors via
-  `planSpeculation()`; the light tail falls through to synchronous
-  assembly on commit. First step of the §22.1 cost optimization.
+  a door-feel bias. The DO eager-generates only the top 2 ranked
+  doors via `planSpeculation()`; the light tail falls through to
+  synchronous assembly. First step of the §22.1 cost optimization.
+- **Adaptive slow-Critic sample rate** (§22.3, §6.3). The
+  `adaptiveSampleRate()` function in shared computes the next
+  sampling rate from the trailing flagged vs. accepted counts,
+  bounded so we always sample something and never spike the rate.
+  `POST /critic/retune` reads the Critic's Notebook, computes the
+  rate, and publishes it to the singleton FactoryStateDO. The
+  per-guest DO reads the live rate before every sampling decision.
+- **Cost-per-session instrumentation** (§18.3). The DO meters each
+  threshold's room assembly via the cost table in
+  `apps/api/engine/cost-meter.ts` and emits
+  `generation_cost_cents` and cumulative `session_cost_cents`
+  telemetry signals. The Telemetry of Wonder dashboard surfaces
+  the trail; ops can watch the <40c p95 SLO live.
 - **Better-Auth integration** for Recipe Keepers (§17.2) — was the
   Phase 2 carryover, landed at the start of Phase 3. Passkey-only
   against the same Postgres as Payload; a custom `AuthStrategy`

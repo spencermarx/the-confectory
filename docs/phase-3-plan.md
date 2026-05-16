@@ -9,23 +9,21 @@ flag as "later".
 
 ### Cost and quality
 
-- **Door-likelihood prediction model** (§22.1). Today every
-  resolved downstream door is fully pre-generated on threshold
-  commit, which is wasteful (4x compute at a branching shell).
-  Phase 3 lands a small predictor that ranks doors by guest-history-
-  conditioned likelihood, then eager-generates the top 2 and
-  light-pre-generates the others. The predictor is in-process and
-  deterministic for tests; production swaps to a small Workers AI
-  model.
-- **Slow Critic subsample tuning** (§22.3). Phase 2 set the sample
-  at 25%; Phase 3 reads the Critic's Notebook for the trailing 30
-  days, computes the slow-Critic agreement rate, and tunes the
-  sample down toward §6.3's Phase 3 targets (5-10%).
-- **Cheaper models behind the same providers** (§22.7). Llama 3.1
-  8B for room assembly at the edge; subsample Slow Critic further;
-  pre-bake more surfaces; consider OSS TTS for Oompa-Loompas.
-- **Cost-per-session SLO** (§18.3). Phase 3 should hit <$0.40 p95
-  cost-per-guest-session at steady state.
+- ✅ **Door-likelihood prediction model** (§22.1) — landed.
+- ✅ **Slow Critic subsample tuning** (§22.3) — landed. The Worker
+  exposes `POST /critic/retune` which reads the trailing rejection
+  stats, calls `adaptiveSampleRate()`, and publishes the next rate
+  to the singleton FactoryStateDO. The per-guest DO reads the
+  live rate before each sampling decision. Targets follow §6.3's
+  phase bands.
+- ✅ **Cost-per-session instrumentation** (§18.3) — landed. The DO
+  estimates per-room-assembly spend via the cost meter and emits
+  `generation_cost_cents` and cumulative `session_cost_cents`
+  telemetry signals. The Telemetry of Wonder dashboard surfaces
+  the cumulative trail; ops can watch the p95 SLO live.
+- **Cheaper models behind the same providers** (§22.7). Still open.
+  Llama 3.1 8B for room assembly at the edge; pre-bake more
+  surfaces; consider OSS TTS for Oompa-Loompas.
 
 ### World
 

@@ -6,6 +6,7 @@ import {
 } from '@confectory/shared';
 import type { ConsequenceTypeId, Guest, GuestLocation, ShellId } from '@confectory/shared';
 import { recordConsequence, recordMark, recordVisit, upsertGuest } from '../db/guest-store.ts';
+import { combineCosts } from '../engine/cost-meter.ts';
 import {
   type AssembledRoom,
   InProcessMemory,
@@ -19,6 +20,7 @@ import type { MemoryProvider } from '../engine/providers/memory.ts';
 import { WorkersAICritic, WorkersAIFoundry } from '../engine/providers/workers-ai.ts';
 import type { Env } from '../env.ts';
 import { getShell } from '../shells.ts';
+import { recordEvent } from '../telemetry/recorder.ts';
 
 interface StoredState {
   guest: Guest;
@@ -29,6 +31,10 @@ interface StoredState {
   // §5.2: cached speculative pre-generations, keyed by shell_id.
   // TTL of one minute per §5.2; older entries are pruned on read.
   speculative_cache?: Record<ShellId, { manifest: AssembledRoom; cached_at: number }>;
+  // §18.3: cumulative spend in cents for the current session. The
+  // SLO is <40c p95 at steady state; we tick this on every accepted
+  // generation and emit it as a telemetry signal.
+  session_cost_cents?: number;
 }
 
 interface DialRequestBody {
@@ -264,6 +270,22 @@ export class GuestSessionDO implements DurableObject {
     return factoryRes.json();
   }
 
+  // §22.3: read the live adaptive slow-Critic sample rate from the
+  // singleton. Falls back to the §6.3 Phase 2 default if the
+  // singleton hasn't been initialised yet.
+  private async fetchSampleRate(): Promise<number> {
+    try {
+      const factoryId = this.env.FACTORY_STATE.idFromName('global');
+      const factoryStub = this.env.FACTORY_STATE.get(factoryId);
+      const res = await factoryStub.fetch('https://do/sample-rate');
+      if (!res.ok) return 0.25;
+      const body = (await res.json()) as { rate: number };
+      return typeof body.rate === 'number' ? body.rate : 0.25;
+    } catch {
+      return 0.25;
+    }
+  }
+
   // §5.1: threshold crossed. Checks the speculative cache first (§5.2);
   // falls through to synchronous assembly only if the cache misses.
   private async handleThreshold(request: Request): Promise<Response> {
@@ -368,15 +390,17 @@ export class GuestSessionDO implements DurableObject {
     // the guest commits to one of these doors — acceptable because
     // the §22.1 hypothesis is that likelihood << 0.5 for the tail.
 
-    // §22.3, §6.2: slow Critic at 25% sample on accepted artifacts.
-    // Skip when served from cache — those artifacts were sampled when
-    // the cache entry was originally produced.
+    // §22.3, §6.2: slow Critic sampling on accepted artifacts.
+    // Phase 3 reads the adaptive sample rate from the singleton so
+    // it tracks the rolling Critic's Notebook agreement. Skip when
+    // served from cache — those were sampled at original production.
     if (!served_from_cache) {
       const canonicalNames = body.candidate_shell_ids
         .map((id) => getShell(id)?.name)
         .filter((n): n is string => Boolean(n));
+      const sampleRate = await this.fetchSampleRate();
       for (const artifact of manifest.accepted_artifacts) {
-        if (Math.random() >= 0.25) continue;
+        if (Math.random() >= sampleRate) continue;
         this.state.waitUntil(
           this.env.BACKGROUND.send({
             kind: 'slow_critic_review',
@@ -389,6 +413,40 @@ export class GuestSessionDO implements DurableObject {
           }).catch(() => {}),
         );
       }
+    }
+
+    // §18.3: estimate the cost of this room assembly and roll it into
+    // the cumulative session spend. The signal feeds the Telemetry of
+    // Wonder dashboard so Recipe Keepers can watch the SLO.
+    if (!served_from_cache) {
+      const callKinds = [
+        { kind: 'edge_room_assembly' as const, calls: 1 },
+        // accepted_artifacts: each implies at least one Critic call.
+        { kind: 'edge_critic' as const, calls: manifest.accepted_artifacts.length || 1 },
+        {
+          kind: 'edge_image' as const,
+          calls: manifest.accepted_artifacts.filter((a) => a.kind === 'surface').length,
+        },
+      ];
+      const breakdown = combineCosts(callKinds);
+      const prior = next.session_cost_cents ?? 0;
+      const total = prior + breakdown.total_cents;
+      const withCost: StoredState = { ...next, session_cost_cents: total };
+      await this.state.storage.put<StoredState>('state', withCost);
+      this.state.waitUntil(
+        Promise.all([
+          recordEvent({ db: this.env.DB }, next.guest.id, {
+            signal: 'generation_cost_cents',
+            value: breakdown.total_cents,
+            labels: { shell_id: destination.id },
+          }),
+          recordEvent({ db: this.env.DB }, next.guest.id, {
+            signal: 'session_cost_cents',
+            value: total,
+            labels: { shell_id: destination.id },
+          }),
+        ]).catch(() => {}),
+      );
     }
 
     return Response.json({
