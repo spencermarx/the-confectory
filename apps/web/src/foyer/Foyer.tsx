@@ -12,6 +12,7 @@ import { NamePlate } from './NamePlate.tsx';
 import { PortalDoor } from './PortalDoor.tsx';
 import { Sign } from './Sign.tsx';
 import { TicketStub } from './TicketStub.tsx';
+import { useTypographyPreload } from './use-typography-preload.ts';
 
 // §8: the foyer is the only persistent room. Hand-authored.
 // Phase 1 placeholder geometry; the Portal Door + brass dial are
@@ -42,6 +43,10 @@ export function Foyer() {
   // §16.1: The Pause. The foyer is a generated-content surface (the
   // dial's resonant layout); 3s of no input emits a Pause event.
   usePauseDetector({ shell: 'the-foyer' });
+
+  // §22.4: pre-load the typography registry so the dial doesn't stall
+  // the first time the needle sweeps onto an unfamiliar shell.
+  useTypographyPreload();
 
   // §17.3: the Sweetwright greets the guest in the foyer. This is the
   // consent moment — in-character — and it doubles as the first line a

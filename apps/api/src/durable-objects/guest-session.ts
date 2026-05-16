@@ -1,5 +1,6 @@
 import { type DialEntry, resonantLayout } from '@confectory/shared';
 import type { ConsequenceTypeId, Guest, GuestLocation, ShellId } from '@confectory/shared';
+import { recordConsequence, recordMark, recordVisit, upsertGuest } from '../db/guest-store.ts';
 import {
   type AssembledRoom,
   InProcessMemory,
@@ -10,6 +11,7 @@ import {
 } from '../engine/index.ts';
 import { AcceptingCritic, InProcessFoundry } from '../engine/providers/in-process.ts';
 import type { MemoryProvider } from '../engine/providers/memory.ts';
+import { WorkersAICritic, WorkersAIFoundry } from '../engine/providers/workers-ai.ts';
 import type { Env } from '../env.ts';
 import { getShell } from '../shells.ts';
 
@@ -64,7 +66,21 @@ export class GuestSessionDO implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
-    this.assembler = new RoomAssembler(new InProcessFoundry(), new AcceptingCritic());
+    // §3.3: provider activation. When the AI binding is present we
+    // use the production WorkersAI providers; otherwise we keep the
+    // deterministic in-process pair so local dev stays fast and tests
+    // stay reproducible.
+    if (env.AI) {
+      const aiRunner = env.AI as unknown as {
+        run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
+      };
+      this.assembler = new RoomAssembler(
+        new WorkersAIFoundry(aiRunner),
+        new WorkersAICritic(aiRunner),
+      );
+    } else {
+      this.assembler = new RoomAssembler(new InProcessFoundry(), new AcceptingCritic());
+    }
     this.memory = new InProcessMemory();
   }
 
@@ -297,6 +313,16 @@ export class GuestSessionDO implements DurableObject {
     };
     await this.state.storage.put<StoredState>('state', next);
 
+    // §3.4, §7.1: mirror the structural pieces (guest + visit) into D1
+    // so they survive DO eviction and so a Recipe Keeper can inspect
+    // an individual session via the database.
+    this.state.waitUntil(
+      Promise.all([
+        upsertGuest(this.env.DB, next.guest, now),
+        recordVisit(this.env.DB, next.guest.id, destination.id, next.guest.current_room_id!, now),
+      ]).catch(() => {}),
+    );
+
     // §8.5: guest left the foyer for an interior room; drop them from
     // the foyer co-presence broadcast.
     this.state.waitUntil(this.publishPresence(stored.guest.id, 'elsewhere').catch(() => {}));
@@ -390,6 +416,18 @@ export class GuestSessionDO implements DurableObject {
       session_events: [...stored.session_events, event],
     };
     await this.state.storage.put<StoredState>('state', next);
+
+    // §3.4, §4.6: persist the consequence + stub mark to D1 so the
+    // ticket stub state survives DO eviction and so Recipe Keepers
+    // can query consequence history directly.
+    const lastMark = result.guest.ticket_stub.marks[result.guest.ticket_stub.marks.length - 1];
+    this.state.waitUntil(
+      Promise.all([
+        upsertGuest(this.env.DB, result.guest, Date.now()),
+        recordConsequence(this.env.DB, result.guest.id, result.consequence),
+        ...(lastMark ? [recordMark(this.env.DB, result.guest.id, lastMark)] : []),
+      ]).catch(() => {}),
+    );
 
     return Response.json({
       status: 'applied',

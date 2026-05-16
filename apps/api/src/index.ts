@@ -11,6 +11,7 @@ import { memoryRoutes } from './routes/memory.ts';
 import { roomRoutes } from './routes/rooms.ts';
 import { sessionRoutes } from './routes/session.ts';
 import { telemetryRoutes } from './routes/telemetry.ts';
+import { typographyRoutes } from './routes/typography.ts';
 import { logRejection } from './telemetry/critic-notebook.ts';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -25,6 +26,7 @@ app.route('/consequences', consequenceRoutes);
 app.route('/memory', memoryRoutes);
 app.route('/telemetry', telemetryRoutes);
 app.route('/critic', criticRoutes);
+app.route('/typography', typographyRoutes);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 

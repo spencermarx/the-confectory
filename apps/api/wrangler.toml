@@ -3,9 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
-# §3.2: Workers AI binding. Bind once Phase 1 generation lands.
-# [ai]
-# binding = "AI"
+# §3.3, §10.3: Workers AI binding. Phase 2 turns this on so the
+# DO swaps InProcessFoundry for WorkersAIFoundry (and the slow Critic
+# queue swaps to WorkersAICritic). The binding is optional at the type
+# level so local dev stays fast.
+[ai]
+binding = "AI"
 
 # §3.2: Per-guest Durable Object + global factory singleton DO.
 [[durable_objects.bindings]]

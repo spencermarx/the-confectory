@@ -107,11 +107,11 @@ dialogueRoutes.post('/founder/set-piece', async (c) => {
   });
 });
 
-// §11.1, §21.4: the Founder's interactive mode is gated to one Phase 1
-// scene (the Foundry Door). The Worker hands back a session token the
-// client uses to open the WebRTC channel directly to Gemini Live.
-// Phase 1 of the API returns 503 until the Live provider is wired; the
-// client falls back to the set-piece library per §19.1.
+// §11.1, §21.4, §22.2: the Founder's interactive mode is gated to one
+// Phase 1 scene (the Foundry Door). Phase 2 returns a session-start
+// payload the client uses to open the WebRTC channel directly to
+// Gemini Live. The set-piece fallback (§19.1) kicks in when the
+// secret isn't configured.
 dialogueRoutes.post('/founder/interactive', async (c) => {
   const guestId = getCookie(c, GUEST_COOKIE);
   if (!guestId) return c.json({ error: 'no_session' }, 401);
@@ -121,7 +121,31 @@ dialogueRoutes.post('/founder/interactive', async (c) => {
     return c.json({ error: 'interactive_not_available_in_this_room' }, 403);
   }
 
-  // Phase 1: provider is not yet wired. Return service-unavailable so
-  // the client falls through to the set-piece library (§19.1).
-  return c.json({ error: 'voice_provider_not_configured' }, 503);
+  // §19.1 fallback: if the Live secret isn't bound, tell the client to
+  // play the set-piece library instead. Keeps the experience graceful.
+  if (!c.env.GEMINI_LIVE_TOKEN) {
+    return c.json(
+      {
+        status: 'fallback_to_set_piece',
+        set_piece_id: 'founder-foundry-door',
+        note: 'voice_provider_not_configured',
+      },
+      200,
+    );
+  }
+
+  // §22.2: hand the client an ephemeral session config. The browser
+  // opens the WebRTC channel directly to Gemini Live; the Worker
+  // doesn't proxy audio. The Founder system instruction includes the
+  // base character notes — Phase 3 layers in episodic memory excerpts.
+  return c.json({
+    status: 'ready',
+    voice_id: founder.voice_id,
+    endpoint: c.env.GEMINI_LIVE_ENDPOINT ?? 'https://generativelanguage.googleapis.com/v1beta',
+    // Phase 2 hands the secret to the client over TLS; Phase 3 mints a
+    // short-lived per-session token via a Worker → Google STS exchange.
+    session_token: c.env.GEMINI_LIVE_TOKEN,
+    system_instruction: `You are the Founder of The Confectory. Speak in his cadence. Acknowledge the guest's presence at the Foundry Door. Stay brief.`,
+    expires_at: Date.now() + 60 * 1000,
+  });
 });
