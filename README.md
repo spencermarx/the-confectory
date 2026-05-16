@@ -6,41 +6,49 @@ state of the implementation.
 
 ## Status
 
-**Phase 2 in progress.** See [`docs/phase-2-plan.md`](./docs/phase-2-plan.md)
-for the working plan; [`docs/phase-1-close.md`](./docs/phase-1-close.md)
+**Phase 2 substantially complete.** See
+[`docs/phase-2-plan.md`](./docs/phase-2-plan.md) for the working
+plan and what remains; [`docs/phase-1-close.md`](./docs/phase-1-close.md)
 summarizes how Phase 1 closed.
 
-Phase 2 so far:
+Phase 2 landed:
 
-- **Speculative pre-generation** (§5.1 step 6, §5.2). `/settle` kicks
-  background pre-gen for the settled destination via `state.waitUntil`;
-  `/threshold` returns served-from-cache instantly in the 95% case
-  and otherwise falls through to synchronous assembly. On commit,
-  every resolved downstream door is pre-generated for the next hop.
-  Cache TTL is one minute (§5.2); consumed entries evict on commit
-  (§5.3).
-- **Slow Critic at 25% sample** (§22.3, §6.2). The Queue consumer in
-  the Worker processes `slow_critic_review` jobs; verdicts below 0.6
-  land in the Critic's Notebook automatically. `InProcessSlowCritic`
-  is the Phase 2 default; `AnthropicSlowCritic` against Claude Opus
-  4.7 is wired and ready behind the same `SlowCriticProvider`
-  interface (§3.3, §10.4).
-- `RoomAssembler` now surfaces an `accepted_artifacts` list alongside
-  the `rejected_artifacts` so the DO can sample without re-running
-  the generation.
-- **WebSocket fanout** (§14.2) from the singleton `FactoryStateDO`
-  using the Hibernation API. `GET /factory/subscribe` upgrades the
-  client into a session that receives mood updates immediately on
-  `PUT /factory/mood` (so the Mood Console takes effect live) and
-  foyer co-presence updates whenever a guest enters/leaves.
-- **Co-presence ghosts** (§8.5). The per-guest DO publishes its foyer
-  presence to the singleton on `/start` and clears it on threshold
-  cross. Ghost tokens are SHA-256-derived anonymized ids so the
-  fanout can't be used to track guests. The web client renders
+- **Speculative pre-generation** (§5.1 step 6, §5.2) — `/settle` kicks
+  background pre-gen via `state.waitUntil`; `/threshold` serves from
+  cache instantly in the 95% case. On commit, every downstream door
+  is pre-generated for the next hop. TTL 1 minute (§5.2).
+- **Slow Critic at 25% sample** (§22.3, §6.2) — Queue consumer
+  processes `slow_critic_review` jobs; verdicts <0.6 land in the
+  Critic's Notebook automatically. `InProcessSlowCritic` is the
+  default; `AnthropicSlowCritic` against Claude Opus 4.7 ready.
+- **WebSocket fanout** (§14.2) — Hibernation API on
+  `FactoryStateDO`. `/factory/subscribe` upgrades into a session
+  that receives mood + foyer-presence deltas live. Mood Console
+  edits take effect in-flight.
+- **Co-presence ghosts** (§8.5) — anonymized SHA-256 ghost tokens;
   faint capsule silhouettes at deterministic positions around the
-  foyer — no interaction, no voice, just witness.
-- Client `useFactoryConnection()` maintains the WebSocket with
-  exponential backoff and exposes `{ mood, presence, connected }`.
+  foyer.
+- **D1 backfill** for structural memory (§3.4, §7.1) — guest, visit,
+  consequence, ticket-stub-mark mirrored from the DO to D1 via
+  `waitUntil`.
+- **Typography preload** (§22.4) — single batched WOFF2 preload via
+  `<link rel="preload" as="font">` on foyer entry.
+- **Gemini Live handoff** (§11.1, §22.2) —
+  `/dialogue/founder/interactive` returns a session-token payload
+  when `GEMINI_LIVE_TOKEN` is bound; §19.1 fallback otherwise.
+- **WorkersAI provider activation** (§3.3) — DO constructor swaps
+  to `WorkersAIFoundry` + `WorkersAICritic` when `env.AI` is bound.
+- **Custom React panels in Payload** (§15.3) — the Mood Console
+  (`/admin/mood-console`), the Critic's Notebook
+  (`/admin/critics-notebook`), and the Telemetry of Wonder dashboard
+  (`/admin/telemetry`), all client-rendered with sliders/filters/
+  sparkline against the Worker API.
+
+Phase 2 carryover (one item):
+
+- 🟡 **Better-Auth integration** for Recipe Keepers (§17.2). Payload's
+  built-in auth is the Phase 2 shim; Better-Auth swap is the
+  remaining Phase 2 plan item.
 
 What's in tree from Phase 1:
 

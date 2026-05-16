@@ -13,57 +13,58 @@ ships when it's right, not on a date.
 
 ### Engine
 
-- **Speculative pre-generation** (§5.1 step 6, §5.2). On `/settle` the
-  Worker now pre-generates the settled destination; on threshold cross
-  it kicks pre-gen for every downstream door of the new room. Phase 3
-  layers in the door-likelihood prediction model (§22.1) so we eager-
-  gen the top 2 and light-gen the rest.
-- **Slow Critic at 25% sample** (§22.3, §6.2). The Queue consumer runs
-  the slow Critic on accepted artifacts; anything below 0.6 lands in
-  the Critic's Notebook. Tune sample rate downward as confidence grows.
-- **WorkersAI / Anthropic provider activation** for production. The
-  `FoundryProvider`, `CriticProvider`, `SlowCriticProvider`,
-  `TTSProvider`, `VoiceProvider`, and `MemoryProvider` interfaces all
-  have production implementations sitting behind them; turning each
-  on is a single swap in the DO/Worker constructors.
-- **Founder interactive via Gemini Live** (§11.1, §22.2). Wire the
-  WebRTC handoff from `/dialogue/founder/interactive` and unblock the
-  Foundry-Door scene.
+- ✅ **Speculative pre-generation** (§5.1 step 6, §5.2) — landed.
+- ✅ **Slow Critic at 25% sample** (§22.3, §6.2) — landed.
+- ✅ **WorkersAI / Anthropic provider activation** — landed (DO
+  constructor swaps providers when `env.AI` is bound; secrets typed
+  in `Env` so production deploys can light them up without code
+  changes).
+- ✅ **Founder interactive via Gemini Live** (§11.1, §22.2) — landed
+  as a session-token handoff with §19.1 fallback when the secret
+  isn't configured.
 
 ### Surfaces
 
-- **Mood Console custom React UI** inside Payload (§15.3). The writer
-  path is live at `PUT /factory/mood`; Phase 2 adds the slider UI,
-  scheduler, and live preview.
-- **Critic's Notebook UI** inside Payload (§15.3, §6.2). The data
-  layer + the slow-Critic queue are wired; Phase 2 adds the reviewer
-  interface with promotion to authored library and negative-example
-  curation.
-- **Telemetry of Wonder dashboard** inside Payload (§15.3, §16). The
-  ingestion pipeline exists (Analytics Engine + D1 trail); Phase 2
-  adds the D3-based custom charts: Pause heatmap, re-entry rates,
-  dwell variance.
+- ✅ **Mood Console** custom React UI inside Payload (§15.3) — landed
+  at `/admin/mood-console` with sliders for the §4.7 mood dials,
+  season selector, save-status indicator, and live `PUT` to
+  `/factory/mood`. The WebSocket fanout (§14.2) propagates the new
+  mood to in-flight guest sessions.
+- ✅ **Critic's Notebook UI** (§15.3, §6.2) — landed at
+  `/admin/critics-notebook` with shell + reason filters over the
+  recent-rejections table. Phase 3 adds promotion to fallback and
+  negative-example curation.
+- ✅ **Telemetry of Wonder** dashboard (§15.3, §16) — landed at
+  `/admin/telemetry` with the §16.1 signal catalog, a per-signal
+  trail readout, p50/p95 stats, and an inline SVG sparkline. Phase 3
+  swaps the trail readout for cross-guest aggregations against
+  Analytics Engine.
 
 ### Identity
 
-- **Better-Auth integration** for Recipe Keepers (§17.2). Replace the
-  built-in Payload auth shim with passkey-only.
+- 🟡 **Better-Auth integration** for Recipe Keepers (§17.2). Still
+  open — Payload's built-in auth is the Phase 2 shim. Tracked above
+  under "Still open".
 
 ### World
 
-- **Co-presence ghosts in the foyer** (§8.5). The singleton
-  FactoryStateDO publishes anonymized presence to a Hibernation API
-  WebSocket channel (§14.2); per-guest DOs subscribe and render faint
-  semi-transparent figures.
+- ✅ **Co-presence ghosts in the foyer** (§8.5) — landed via the
+  §14.2 Hibernation-API WebSocket fanout on FactoryStateDO.
+
+### Still open
+
+- **Better-Auth integration** for Recipe Keepers (§17.2). Payload's
+  built-in auth is the Phase 2 shim; Better-Auth swap is the one
+  remaining Phase 2 plan item. Carried into a Phase 2.1 patch.
 
 ### Operations
 
-- **D1 backfill** for per-guest structural memory (§7.1, §3.4). The
-  GuestSessionDO is authoritative in-memory; Phase 2 mirrors the
-  structural pieces (visits, consequences, ticket-stub marks) into
-  D1 so cross-device account upgrades survive DO eviction.
-- **Dial typography preload** (§22.4). Pre-fetch the typography
-  registry on foyer entry as a single batched WOFF2 fetch.
+- ✅ **D1 backfill** for per-guest structural memory (§7.1, §3.4) —
+  landed. `apps/api/db/guest-store.ts` mirrors guest + visit +
+  consequence + ticket-stub-mark from the DO to D1 via `waitUntil`.
+- ✅ **Dial typography preload** (§22.4) — landed.
+  `GET /typography/registry` returns the typography→font URL map;
+  the foyer emits `<link rel="preload" as="font">` tags on entry.
 
 ## Out of scope (deferred again)
 

@@ -20,6 +20,25 @@ import { Users } from './src/collections/users.ts';
 export default buildConfig({
   admin: {
     user: Users.slug,
+    // §15.3: the three specialty custom React panels. Each is a
+    // client component that talks to the Worker API; Payload's
+    // bundler resolves the path strings at admin-build time.
+    components: {
+      views: {
+        moodConsole: {
+          Component: '/src/views/MoodConsole',
+          path: '/mood-console',
+        },
+        criticNotebook: {
+          Component: '/src/views/CriticNotebook',
+          path: '/critics-notebook',
+        },
+        telemetryDashboard: {
+          Component: '/src/views/TelemetryDashboard',
+          path: '/telemetry',
+        },
+      },
+    },
   },
   collections: [
     Users,
