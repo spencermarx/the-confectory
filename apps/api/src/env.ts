@@ -6,6 +6,8 @@ export interface Env {
   ASSETS: R2Bucket;
   MEMORY: VectorizeIndex;
   BACKGROUND: Queue<BackgroundJob>;
+  // §16.3: Analytics Engine dataset for high-volume telemetry.
+  TELEMETRY: AnalyticsEngineDataset;
   ENVIRONMENT: 'development' | 'preview' | 'production';
 }
 

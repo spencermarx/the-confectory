@@ -6,7 +6,11 @@ state of the implementation.
 
 ## Status
 
-**Phase 1, Weeks 1-13 (§21.1-§21.5).** What's in tree:
+**Phase 1 complete — Weeks 1-16 (§21.1-§21.7).** See
+[`docs/phase-1-close.md`](./docs/phase-1-close.md) for the close-out
+summary and Phase 2 scope decisions.
+
+What's in tree:
 
 Foundations (Week 1-2, §21.1):
 
@@ -116,11 +120,33 @@ Memory and consequence (Week 11-13, §21.5):
 - Web: `TicketStub` now surfaces accumulated marks; a small
   `applyConsequence()` client helper closes the loop.
 
-Not yet built (later Phase 1):
+Polish and close (Week 14-16, §21.6-§21.7):
 
-- Telemetry of Wonder, Critic's Notebook, Mood Console UI (§15.3, §16)
-  — week 14-15.
-- Visual regression + the Phase 1 latency-budget pass — week 14-15.
+- §16.1 telemetry signal catalog committed in `@confectory/shared`.
+- Telemetry ingestion: `POST /telemetry/event` writes to Analytics
+  Engine + the per-guest D1 trail (§16.3); `GET /telemetry/trail`
+  reads it back. `TELEMETRY` binding configured in wrangler.toml.
+- Client telemetry: `usePauseDetector()` emits The Pause (§16.1)
+  after 3s of zero input; `useTimer()` measures the dial settle
+  and threshold timings.
+- Critic's Notebook data layer: `POST /critic/log` records
+  rejections, `GET /critic/recent` reads them with shell/reason
+  filters (§15.3, §6.2). D1 migration 0002.
+- `docs/phase-1-close.md`: Phase 1 close-out doc with the §21.7
+  retro, acceptance table against §21.6, and Phase 2 scope
+  decisions for §22.
+
+What's deferred to Phase 2:
+
+- The four custom React panels inside Payload (Mood Console,
+  Critic's Notebook, Telemetry dashboard, session inspector) —
+  scaffolded behind their API surfaces.
+- The Founder's interactive Gemini Live channel — gated to
+  `the-foundry-door`, returns 503 until the provider is wired.
+- WorkersAI / Anthropic provider swap in production (interfaces
+  ready, in-process providers are the Phase 1 default).
+- Speculative pre-generation prediction model (§22.1) — current
+  engine resolves and assembles on threshold cross.
 
 ## Layout
 

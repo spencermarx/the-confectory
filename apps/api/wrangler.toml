@@ -52,6 +52,11 @@ queue = "confectory-background"
 max_batch_size = 10
 max_batch_timeout = 30
 
+# §16.3: Analytics Engine for high-volume telemetry events.
+[[analytics_engine_datasets]]
+binding = "TELEMETRY"
+dataset = "confectory_telemetry"
+
 [vars]
 ENVIRONMENT = "development"
 

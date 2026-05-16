@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { SubtitleOverlay } from '../dialogue/SubtitleOverlay.tsx';
 import { speakToOompaLoompa } from '../dialogue/use-dialogue.ts';
 import { type DialEntry, settleOnShell, useDial } from '../hooks/use-dial.ts';
+import { emitTelemetry, usePauseDetector } from '../telemetry/use-telemetry.ts';
 import { BrassDial } from './BrassDial.tsx';
 import { NamePlate } from './NamePlate.tsx';
 import { PortalDoor } from './PortalDoor.tsx';
@@ -24,7 +25,18 @@ export function Foyer() {
     void settleOnShell(entry.shell_id).catch(() => {
       // Settle is advisory: pre-gen will retry on actual threshold cross.
     });
+    // §16.1: dial settle time, measured from page load (good enough
+    // for Phase 1's dashboard; Phase 2 ties it to first dial interaction).
+    emitTelemetry({
+      signal: 'dial_settle_ms',
+      value: performance.now(),
+      labels: { shell_id: entry.shell_id },
+    });
   }, []);
+
+  // §16.1: The Pause. The foyer is a generated-content surface (the
+  // dial's resonant layout); 3s of no input emits a Pause event.
+  usePauseDetector({ shell: 'the-foyer' });
 
   // §17.3: the Sweetwright greets the guest in the foyer. This is the
   // consent moment — in-character — and it doubles as the first line a
