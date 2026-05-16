@@ -1,11 +1,15 @@
 import { type DialEntry, resonantLayout } from '@confectory/shared';
 import type { Guest, GuestLocation, ShellId } from '@confectory/shared';
+import { type AssembledRoom, RoomAssembler } from '../engine/index.ts';
+import { AcceptingCritic, InProcessFoundry } from '../engine/providers/in-process.ts';
 import type { Env } from '../env.ts';
+import { getShell } from '../shells.ts';
 
 interface StoredState {
   guest: Guest;
   session_count: number;
   pending_settle?: { shell_id: ShellId; at: number };
+  current_manifest?: AssembledRoom;
 }
 
 interface DialRequestBody {
@@ -16,16 +20,25 @@ interface SettleRequestBody {
   shell_id: ShellId;
 }
 
+interface ThresholdRequestBody {
+  destination_shell_id: ShellId;
+  candidate_shell_ids: ShellId[];
+}
+
 // §3.2, §5: per-guest Durable Object. Single-writer consistency.
-// Phase 1 Week 3-4: session lifecycle, dial state (§8.3), settle intent.
-// Phase 2 layers in room assembly, speculative pre-generation, memory.
+// Phase 1 Week 5-7: room assembly on threshold cross.
+// Phase 2 layers in speculative pre-generation cache, episodic memory.
 export class GuestSessionDO implements DurableObject {
   private readonly state: DurableObjectState;
   private readonly env: Env;
+  // Phase 1 defaults to the in-process providers. Production swaps to
+  // WorkersAI providers (§3.3) via the AI binding once it's available.
+  private readonly assembler: RoomAssembler;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+    this.assembler = new RoomAssembler(new InProcessFoundry(), new AcceptingCritic());
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -39,6 +52,10 @@ export class GuestSessionDO implements DurableObject {
         return this.handleDial(request);
       case '/settle':
         return this.handleSettle(request);
+      case '/threshold':
+        return this.handleThreshold(request);
+      case '/manifest':
+        return this.handleManifest(url);
       default:
         return new Response('not_found', { status: 404 });
     }
@@ -96,9 +113,9 @@ export class GuestSessionDO implements DurableObject {
     return Response.json({ entries, session_count: stored.session_count });
   }
 
-  // §8.2: settle on a name. The Worker uses this signal to begin
-  // speculative pre-generation of the target shell. Phase 1 Week 3-4
-  // just records the intent; Week 5-7 wires the pre-gen pipeline.
+  // §8.2: settle on a name. Records the intent; Week 5-7's pre-gen
+  // pipeline kicks off as the dial settles. Phase 1 holds it for the
+  // threshold cross handler to commit.
   private async handleSettle(request: Request): Promise<Response> {
     const body = (await request.json()) as SettleRequestBody;
     const stored = await this.state.storage.get<StoredState>('state');
@@ -110,6 +127,74 @@ export class GuestSessionDO implements DurableObject {
     };
     await this.state.storage.put<StoredState>('state', next);
     return Response.json({ pending_settle: next.pending_settle });
+  }
+
+  // §5.1: threshold crossed. Commit the destination, run room assembly,
+  // cache the manifest, return it to the client.
+  private async handleThreshold(request: Request): Promise<Response> {
+    const body = (await request.json()) as ThresholdRequestBody;
+    const stored = await this.state.storage.get<StoredState>('state');
+    if (!stored) return new Response('no_session', { status: 404 });
+
+    const destination = getShell(body.destination_shell_id);
+    if (!destination) return new Response('unknown_shell', { status: 404 });
+    const candidates = body.candidate_shell_ids
+      .map((id) => getShell(id))
+      .filter((s): s is NonNullable<typeof s> => Boolean(s));
+
+    const factoryId = this.env.FACTORY_STATE.idFromName('global');
+    const factoryStub = this.env.FACTORY_STATE.get(factoryId);
+    const factoryRes = await factoryStub.fetch('https://do/mood');
+    const factoryMood = (await factoryRes.json()) as ReturnType<typeof JSON.parse>;
+
+    const manifest = await this.assembler.assemble({
+      shell: destination,
+      guest_id: this.state.id.toString(),
+      candidate_shells: candidates,
+      factory_mood: factoryMood,
+      guest_consequence_severity: this.consequenceSeverity(stored.guest),
+      guest_consequences: new Set(stored.guest.consequences.map((c) => c.type)),
+      available_ol_ids: Object.keys(stored.guest.oompa_loompa_relationships),
+    });
+
+    const now = Date.now();
+    const { pending_settle: _settled, ...rest } = stored;
+    const next: StoredState = {
+      ...rest,
+      guest: {
+        ...stored.guest,
+        last_active_at: now,
+        current_location: 'in_room',
+        current_room_id: `${this.state.id.toString()}:${destination.id}:${now}`,
+        visited_shell_ids: [...stored.guest.visited_shell_ids, destination.id],
+      },
+      current_manifest: manifest,
+    };
+    await this.state.storage.put<StoredState>('state', next);
+
+    return Response.json({
+      room_id: next.guest.current_room_id,
+      manifest,
+    });
+  }
+
+  private async handleManifest(url: URL): Promise<Response> {
+    const requested = url.searchParams.get('room_id');
+    const stored = await this.state.storage.get<StoredState>('state');
+    if (!stored?.current_manifest || stored.guest.current_room_id !== requested) {
+      return new Response('not_found', { status: 404 });
+    }
+    return Response.json({
+      room_id: stored.guest.current_room_id,
+      manifest: stored.current_manifest,
+    });
+  }
+
+  private consequenceSeverity(guest: Guest): number {
+    // §5.2 step 3: blend the guest's consequence state into the mood.
+    // Phase 1 uses a count proxy; Phase 2 layers in severity weights
+    // pulled from ConsequenceType.affects_factory_opinion.
+    return Math.min(1, guest.consequences.length / 5);
   }
 
   private createGuest(now: number): Guest {

@@ -6,7 +6,7 @@ state of the implementation.
 
 ## Status
 
-**Phase 1, Weeks 1-4 (§21.1-§21.2).** What's in tree:
+**Phase 1, Weeks 1-7 (§21.1-§21.3).** What's in tree:
 
 Foundations (Week 1-2, §21.1):
 
@@ -40,14 +40,39 @@ The foyer (Week 3-4, §21.2):
   the guest's Durable Object; `/foyer/settle` records the settle intent
   that drives speculative pre-generation in Week 5-7.
 
+The engine (Week 5-7, §21.3):
+
+- Pure-logic engine helpers in `@confectory/shared`:
+  - `resolveDoorDestination()` per §5.2 step 1 (constraint matching with
+    topology, mood floors, forbidden ids, `require_consequence` gates).
+  - `composeMood()` per §5.2 step 3 (shell × factory × guest blend with
+    explicit override path).
+- `FoundryProvider` / `CriticProvider` interfaces per §3.3, plus an
+  `InProcessFoundry` (deterministic, used as the default in Phase 1),
+  a `WorkersAIFoundry` + `WorkersAICritic` scaffold against the Workers
+  AI binding, and `AcceptingCritic`/`RejectingCritic` test doubles.
+- `criticLoop()` enforces the §6.1 retry budget (1 by default, 3 for
+  cul-de-sacs per §5.4) and reports the rejection reason for the slow
+  Critic's training corpus (§6.2).
+- `RoomAssembler` orchestrates §5.2 end-to-end: door resolution, mood
+  composition, prop + OL assignment, signage and surfaces through the
+  Critic loop, with §6.4 authored-fallback service on exhaustion.
+- Three more authored shells: `the-treacle-deep` (cul-de-sac),
+  `the-foundry-door` (gate / set-piece), `the-elevator` (§5.5 budget
+  room), each with a hand-written `AuthoredFallback`.
+- `POST /rooms/threshold` runs assembly inside `GuestSessionDO` and
+  caches the manifest; `GET /rooms/:id/manifest` returns it.
+- `GET|PUT /factory/mood` exposes the Mood Console writer path: the
+  singleton `FactoryStateDO` accepts partial mood patches that take
+  effect on the next room assembly.
+
 Not yet built (later Phase 1):
 
-- Room assembly pipeline, speculative pre-generation, fast Style Critic
-  in flight (§5, §6.1) — week 5-7.
+- The Mood Console custom React UI inside Payload (§15.3) and the dial-
+  driven settle → speculative pre-gen wiring on the client.
 - The Founder set-piece, the first Oompa-Loompa (§11) — week 8-10.
 - Episodic memory + summarization (§7) — week 11-13.
-- Telemetry of Wonder, Critic's Notebook, Mood Console UIs (§15.3, §16)
-  — week 14-15.
+- Telemetry of Wonder, Critic's Notebook (§15.3, §16) — week 14-15.
 
 ## Layout
 

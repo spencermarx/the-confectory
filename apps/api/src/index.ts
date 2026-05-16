@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import type { Env } from './env.ts';
+import { factoryRoutes } from './routes/factory.ts';
 import { foyerRoutes } from './routes/foyer.ts';
 import { healthRoutes } from './routes/health.ts';
+import { roomRoutes } from './routes/rooms.ts';
 import { sessionRoutes } from './routes/session.ts';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -9,6 +11,8 @@ const app = new Hono<{ Bindings: Env }>();
 app.route('/health', healthRoutes);
 app.route('/session', sessionRoutes);
 app.route('/foyer', foyerRoutes);
+app.route('/rooms', roomRoutes);
+app.route('/factory', factoryRoutes);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 
